@@ -59,7 +59,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          const userCredential = await signInWithEmailAndPassword(auth as Auth, email, password);
+          const userCredential = await signInWithEmailAndPassword(auth, email, password);
           const firebaseUser = userCredential.user;
           
           // Get additional user data from Firestore
@@ -103,10 +103,10 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          const userCredential = await createUserWithEmailAndPassword(auth as Auth, email, password);
+          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
           const firebaseUser = userCredential.user;
           
-          // Create user document in Firestore
+          // Create user document in Firestore - filter out undefined values
           const userData = {
             name,
             email,
@@ -114,6 +114,8 @@ export const useAuthStore = create<AuthState>()(
             sellerModeActive: false,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
+            // Only include photoURL if it's not null/undefined
+            ...(firebaseUser.photoURL && { photoURL: firebaseUser.photoURL }),
           };
           
           await setDoc(doc(db, 'users', firebaseUser.uid), userData);
@@ -151,7 +153,7 @@ export const useAuthStore = create<AuthState>()(
 
       logout: async () => {
         try {
-          await signOut(auth as Auth);
+          await signOut(auth);
           set({ 
             user: null, 
             isGuest: false,
@@ -258,7 +260,7 @@ export const useAuthStore = create<AuthState>()(
 
 // Set up auth state listener
 if (auth) {
-  onAuthStateChanged(auth as Auth, async (firebaseUser) => {
+  onAuthStateChanged(auth, async (firebaseUser) => {
     const { setUser, setLoading } = useAuthStore.getState();
     
     if (firebaseUser) {

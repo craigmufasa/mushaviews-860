@@ -81,6 +81,15 @@ export default function PropertyDetailScreen() {
     setTourModalVisible(true);
   };
 
+  // Format the listed date safely
+  const formatListedDate = (dateString: string) => {
+    try {
+      return new Date(dateString).toLocaleDateString();
+    } catch (error) {
+      return 'Recently listed';
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -135,7 +144,7 @@ export default function PropertyDetailScreen() {
           <PropertyFeatures property={property} />
           <View style={styles.listedDateContainer}>
             <Text style={styles.listedDateText}>
-              Listed on {new Date(property.listedDate).toLocaleDateString()}
+              Listed on {formatListedDate(property.listedDate)}
             </Text>
           </View>
         </View>

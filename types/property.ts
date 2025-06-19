@@ -81,6 +81,7 @@ export interface Property {
   beds: number;
   baths: number;
   sqm: number; // Square metres
+  sqft: number; // Square feet (calculated from sqm or provided directly)
   lotSize?: number;
   yearBuilt?: number;
   type: PropertyType;
@@ -117,7 +118,7 @@ export interface Property {
   // Timestamps
   createdAt?: Date;
   updatedAt?: Date;
-  listedDate?: string;
+  listedDate: string; // Make this required to avoid undefined issues
   
   // Offline and performance optimization
   isOfflineReady?: boolean;
