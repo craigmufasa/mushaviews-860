@@ -98,7 +98,7 @@ export default function Add3DTourScreen() {
       setEmbedUrl(property.embedUrl);
     }
     if (property?.embedSettings) {
-      // Handle optional properties properly
+      // Handle optional properties properly with fallback values
       setEmbedSettings({
         allowFullscreen: property.embedSettings.allowFullscreen ?? true,
         autoplay: property.embedSettings.autoplay ?? false,
@@ -319,6 +319,67 @@ export default function Add3DTourScreen() {
     }
   };
 
+  // Generate embed HTML for WebView preview
+  const generateEmbedHTML = () => {
+    if (!embedUrl) return '';
+    
+    const responsive = embedSettings.responsive ? 'width="100%" height="100%"' : 'width="640" height="360"';
+    const allowFullscreen = embedSettings.allowFullscreen ? 'allowfullscreen' : '';
+    const autoplay = embedSettings.autoplay ? '&autoplay=1' : '';
+    const controls = embedSettings.showControls ? '' : '&controls=0';
+    
+    // Handle different URL formats
+    let finalUrl = embedUrl;
+    if (embedUrl.includes('?')) {
+      finalUrl = `${embedUrl}${autoplay}${controls}`;
+    } else {
+      finalUrl = `${embedUrl}?v=1${autoplay}${controls}`;
+    }
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { 
+              margin: 0; 
+              padding: 0; 
+              background: #000; 
+              overflow: hidden;
+            }
+            iframe { 
+              border: none; 
+              display: block; 
+              width: 100vw;
+              height: 100vh;
+            }
+            .container { 
+              width: 100%; 
+              height: 100vh; 
+              display: flex;
+              justify-content: center;
+              align-items: center;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <iframe 
+              src="${finalUrl}" 
+              ${responsive}
+              ${allowFullscreen}
+              frameborder="0"
+              scrolling="no"
+              loading="lazy"
+              allow="fullscreen; accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; magnetometer; xr-spatial-tracking;">
+            </iframe>
+          </div>
+        </body>
+      </html>
+    `;
+  };
+
   if (showWebViewPreview && embedUrl) {
     return (
       <SafeAreaView style={styles.webViewContainer} edges={['top']}>
@@ -333,7 +394,7 @@ export default function Add3DTourScreen() {
         </View>
 
         <WebView
-          source={{ uri: embedUrl }}
+          source={{ html: generateEmbedHTML() }}
           style={styles.webView}
           startInLoadingState={true}
           renderLoading={() => (
@@ -355,6 +416,9 @@ export default function Add3DTourScreen() {
           originWhitelist={['*']}
           allowsInlineMediaPlayback={true}
           allowsAirPlayForMediaPlayback={true}
+          onLoadStart={() => console.log('WebView load started')}
+          onLoadEnd={() => console.log('WebView load ended')}
+          onMessage={(event) => console.log('WebView message:', event.nativeEvent.data)}
         />
       </SafeAreaView>
     );
