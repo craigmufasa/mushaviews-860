@@ -46,6 +46,17 @@ interface AuthState {
   setInitialized: (value: boolean) => void;
 }
 
+// Helper to remove undefined values from objects before saving to Firestore
+const removeUndefinedValues = (obj: any): any => {
+  const cleaned: any = {};
+  Object.keys(obj).forEach(key => {
+    if (obj[key] !== undefined) {
+      cleaned[key] = obj[key];
+    }
+  });
+  return cleaned;
+};
+
 // Helper to convert Firebase user to our User type
 const convertFirebaseUser = async (firebaseUser: FirebaseUser): Promise<User | null> => {
   try {
@@ -69,18 +80,25 @@ const convertFirebaseUser = async (firebaseUser: FirebaseUser): Promise<User | n
         id: firebaseUser.uid,
         name: firebaseUser.displayName || '',
         email: firebaseUser.email || '',
-        photoURL: firebaseUser.photoURL || undefined,
         isSeller: false,
         sellerModeActive: false,
         createdAt: new Date().toISOString(),
         role: 'buyer',
       };
       
-      await setDoc(doc(db, 'users', firebaseUser.uid), {
+      // Only add photoURL if it exists
+      if (firebaseUser.photoURL) {
+        newUser.photoURL = firebaseUser.photoURL;
+      }
+      
+      // Remove undefined values before saving to Firestore
+      const cleanUserData = removeUndefinedValues({
         ...newUser,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      
+      await setDoc(doc(db, 'users', firebaseUser.uid), cleanUserData);
       
       return newUser;
     }
@@ -197,12 +215,14 @@ export const useAuthStore = create<AuthState>()(
             role: 'buyer',
           };
           
-          // Save user profile to Firestore
-          await setDoc(doc(db, 'users', firebaseUser.uid), {
+          // Save user profile to Firestore (remove undefined values)
+          const cleanUserData = removeUndefinedValues({
             ...newUser,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
+          
+          await setDoc(doc(db, 'users', firebaseUser.uid), cleanUserData);
           
           set({ 
             user: newUser, 
@@ -315,11 +335,14 @@ export const useAuthStore = create<AuthState>()(
           
           const updatedUser = { ...user, ...data };
           
-          // Update Firestore document
-          await updateDoc(doc(db, 'users', user.id), {
+          // Remove undefined values before updating Firestore
+          const cleanData = removeUndefinedValues({
             ...data,
             updatedAt: serverTimestamp(),
           });
+          
+          // Update Firestore document
+          await updateDoc(doc(db, 'users', user.id), cleanData);
           
           // Update Firebase Auth profile if name changed
           if (data.name && auth?.currentUser) {
