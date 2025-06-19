@@ -53,7 +53,6 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress })
              property.status === 'sold' ? 'Sold' : 'Pending'}
           </Text>
         </View>
-        
         {property.has3DTour && (
           <View style={styles.tourBadge}>
             <Box size={16} color="white" />
@@ -61,7 +60,6 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress })
           </View>
         )}
       </View>
-      
       <View style={styles.detailsContainer}>
         <Text style={styles.price}>{formatPrice(property.price)}</Text>
         <View style={styles.specs}>

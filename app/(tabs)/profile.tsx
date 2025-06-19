@@ -72,11 +72,9 @@ export default function ProfileScreen() {
       const success = await toggleSellerMode();
       if (success) {
         if (user.sellerModeActive) {
-          // User was in seller mode and is now switching to buyer mode
           Alert.alert("Switched to Buyer Mode", "You are now browsing as a buyer.");
           router.replace('/(tabs)');
         } else {
-          // User was in buyer mode and is now switching to seller mode
           Alert.alert(
             "Switched to Seller Mode", 
             "You are now in seller mode.",
@@ -107,9 +105,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Stack.Screen options={{ title: "Profile" }} />
-      
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Profile Header */}
         <View style={styles.profileHeader}>
           <View style={styles.avatarContainer}>
             {user ? (
@@ -151,14 +147,12 @@ export default function ProfileScreen() {
             <TouchableOpacity style={styles.signInButton} onPress={handleLogin}>
               <Text style={styles.signInButtonText}>Sign In</Text>
             </TouchableOpacity>
-            
             <TouchableOpacity style={styles.signUpButton} onPress={handleSignup}>
               <Text style={styles.signUpButtonText}>Create Account</Text>
             </TouchableOpacity>
           </View>
         )}
         
-        {/* Seller Upgrade or Mode Toggle */}
         {user && !user.isSeller && (
           <TouchableOpacity 
             style={styles.upgradeButton} 
@@ -168,27 +162,24 @@ export default function ProfileScreen() {
             {upgrading ? (
               <ActivityIndicator color="white" size="small" />
             ) : (
-              <>
+              <React.Fragment>
                 <Building size={18} color="white" />
                 <Text style={styles.upgradeButtonText}>Become a Seller</Text>
-              </>
+              </React.Fragment>
             )}
           </TouchableOpacity>
         )}
 
-        {/* Seller Mode Toggle */}
         {user?.isSeller && (
           <View style={styles.sellerModeContainer}>
             <View style={styles.sellerModeHeader}>
               <Building size={20} color={colors.secondary} />
               <Text style={styles.sellerModeTitle}>Seller Mode</Text>
             </View>
-            
             <View style={styles.sellerModeToggleContainer}>
               <Text style={styles.sellerModeText}>
                 {user.sellerModeActive ? "Currently in seller mode" : "Currently in buyer mode"}
               </Text>
-              
               <Switch
                 trackColor={{ false: colors.border, true: colors.secondaryLight }}
                 thumbColor={user.sellerModeActive ? colors.secondary : colors.textLight}
@@ -198,7 +189,6 @@ export default function ProfileScreen() {
                 disabled={switchingMode}
               />
             </View>
-            
             {user.sellerModeActive && (
               <TouchableOpacity 
                 style={styles.sellerDashboardButton} 
@@ -211,10 +201,8 @@ export default function ProfileScreen() {
           </View>
         )}
         
-        {/* Menu Sections */}
         <View style={styles.menuSection}>
           <Text style={styles.sectionTitle}>Activity</Text>
-          
           <TouchableOpacity 
             style={styles.menuItem}
             onPress={() => router.push('/saved')}
@@ -225,7 +213,6 @@ export default function ProfileScreen() {
             </View>
             <ChevronRight size={20} color={colors.textLight} />
           </TouchableOpacity>
-          
           <TouchableOpacity style={styles.menuItem}>
             <View style={styles.menuItemLeft}>
               <Clock size={20} color={colors.textLight} />
@@ -233,7 +220,6 @@ export default function ProfileScreen() {
             </View>
             <ChevronRight size={20} color={colors.textLight} />
           </TouchableOpacity>
-          
           {user?.isSeller && (
             <TouchableOpacity 
               style={styles.menuItem}
@@ -250,7 +236,6 @@ export default function ProfileScreen() {
         
         <View style={styles.menuSection}>
           <Text style={styles.sectionTitle}>Settings</Text>
-          
           <TouchableOpacity style={styles.menuItem}>
             <View style={styles.menuItemLeft}>
               <Settings size={20} color={colors.textLight} />
@@ -258,7 +243,6 @@ export default function ProfileScreen() {
             </View>
             <ChevronRight size={20} color={colors.textLight} />
           </TouchableOpacity>
-          
           <TouchableOpacity style={styles.menuItem}>
             <View style={styles.menuItemLeft}>
               <Bell size={20} color={colors.textLight} />
@@ -270,7 +254,6 @@ export default function ProfileScreen() {
         
         <View style={styles.menuSection}>
           <Text style={styles.sectionTitle}>Support</Text>
-          
           <TouchableOpacity style={styles.menuItem}>
             <View style={styles.menuItemLeft}>
               <HelpCircle size={20} color={colors.textLight} />
@@ -278,7 +261,6 @@ export default function ProfileScreen() {
             </View>
             <ChevronRight size={20} color={colors.textLight} />
           </TouchableOpacity>
-          
           {user && (
             <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
               <View style={styles.menuItemLeft}>
@@ -288,7 +270,6 @@ export default function ProfileScreen() {
               <ChevronRight size={20} color={colors.textLight} />
             </TouchableOpacity>
           )}
-
           {isGuest && (
             <TouchableOpacity style={styles.menuItem} onPress={handleLogin}>
               <View style={styles.menuItemLeft}>

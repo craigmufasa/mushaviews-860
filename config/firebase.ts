@@ -1,11 +1,8 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, initializeAuth, Auth } from 'firebase/auth';
+import { getAuth, initializeAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-// Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyA4JfWvsw3cem_8XThLOXa76WqTNG2BapY",
   authDomain: "musha-views.firebaseapp.com",
@@ -19,32 +16,17 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase Auth with proper persistence and typing
-let auth: Auth;
-
+// Initialize Auth
+let auth;
 if (Platform.OS === 'web') {
   auth = getAuth(app);
 } else {
-  // For React Native, use initializeAuth with AsyncStorage persistence
-  try {
-    auth = initializeAuth(app, {
-      persistence: AsyncStorage as any
-    });
-  } catch (error: any) {
-    // If already initialized, get the existing instance
-    if (error.code === 'auth/already-initialized') {
-      auth = getAuth(app);
-    } else {
-      throw error;
-    }
-  }
+  // For React Native, use initializeAuth
+  auth = initializeAuth(app);
 }
 
 // Initialize Firestore
 const db = getFirestore(app);
 
-// Initialize Firebase Storage
-const storage = getStorage(app);
-
-export { auth, db, storage };
+export { auth, db };
 export default app;
