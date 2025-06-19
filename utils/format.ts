@@ -1,38 +1,30 @@
-export const formatPrice = (price: number | undefined): string => {
-  if (!price || price === 0) return 'Price not available';
+export const formatPrice = (price: number): string => {
+  // For prices over 1 million, format as $X.XM
+  if (price >= 1000000) {
+    return `$${(price / 1000000).toFixed(1)}M`;
+  }
+  
+  // For rental prices under 10000, assume it's monthly rent
+  if (price < 10000) {
+    return `$${price.toLocaleString()}/mo`;
+  }
+  
+  // Otherwise format with commas
   return `$${price.toLocaleString()}`;
 };
 
-export const formatNumber = (num: number | undefined): string => {
-  if (!num || num === 0) return '0';
-  return num.toLocaleString();
-};
-
-export const formatAddress = (property: any): string => {
-  if (!property) return 'Address not available';
-  
-  const parts = [];
-  if (property.address) parts.push(property.address);
-  if (property.city) parts.push(property.city);
-  if (property.state) parts.push(property.state);
-  if (property.zipCode) parts.push(property.zipCode);
-  
-  return parts.length > 0 ? parts.join(', ') : 'Address not available';
-};
-
-export const formatDate = (date: string | Date | undefined): string => {
-  if (!date) return 'Date not available';
-  
-  try {
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
-    if (isNaN(dateObj.getTime())) return 'Date not available';
-    
-    return dateObj.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  } catch (error) {
-    return 'Date not available';
+export const formatDate = (date: Date | string): string => {
+  if (typeof date === 'string') {
+    date = new Date(date);
   }
+  
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
+export const formatAddress = (property: { address: string; city: string; state: string }): string => {
+  return `${property.address}, ${property.city}, ${property.state}`;
 };

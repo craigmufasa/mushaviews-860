@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Mail, ArrowLeft } from 'lucide-react-native';
@@ -17,10 +18,11 @@ import { useAuthStore } from '@/store/auth-store';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const { resetPassword, isLoading, error: authError, clearError } = useAuthStore();
+  const { resetPassword } = useAuthStore();
   
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   const validateEmail = () => {
@@ -39,20 +41,21 @@ export default function ForgotPasswordScreen() {
   const handleResetPassword = async () => {
     if (!validateEmail()) return;
     
-    setError('');
-    clearError();
+    setIsLoading(true);
     
     try {
       const success = await resetPassword(email);
       
       if (success) {
         setIsSubmitted(true);
-      } else if (authError) {
-        setError(authError);
+      } else {
+        setError('Failed to send reset instructions');
       }
     } catch (error) {
       console.error('Reset password error:', error);
       setError('An error occurred');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -104,7 +107,7 @@ export default function ForgotPasswordScreen() {
             autoCapitalize="none"
             value={email}
             onChangeText={setEmail}
-            error={error || authError}
+            error={error}
             icon={<Mail size={20} color={colors.textLight} />}
           />
           

@@ -2,19 +2,9 @@ import { Stack } from "expo-router";
 import { colors } from "@/constants/colors";
 import { useAuthStore } from "@/store/auth-store";
 import { Redirect } from "expo-router";
-import { View, Text } from "react-native";
 
 export default function AuthLayout() {
-  const { isAuthenticated, hasSelectedRole, user, isInitialized } = useAuthStore();
-  
-  // Show loading while Firebase is initializing
-  if (!isInitialized) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text>Loading...</Text>
-      </View>
-    );
-  }
+  const { isAuthenticated, hasSelectedRole, user } = useAuthStore();
   
   // If user is authenticated and has selected a role
   if (isAuthenticated && hasSelectedRole && user) {

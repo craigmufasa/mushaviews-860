@@ -2,23 +2,40 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User } from '@/types/user';
-import { auth, db } from '@/config/firebase';
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword,
-  signOut,
-  sendPasswordResetEmail,
-  onAuthStateChanged,
-  User as FirebaseUser,
-  updateProfile
-} from 'firebase/auth';
-import { 
-  doc, 
-  setDoc, 
-  getDoc, 
-  updateDoc,
-  serverTimestamp
-} from 'firebase/firestore';
+
+// FIREBASE INTEGRATION POINT 1: Firebase imports would go here
+// import { initializeApp } from 'firebase/app';
+// import { 
+//   getAuth, 
+//   signInWithEmailAndPassword, 
+//   createUserWithEmailAndPassword,
+//   signOut,
+//   sendPasswordResetEmail,
+//   onAuthStateChanged,
+//   User as FirebaseUser
+// } from 'firebase/auth';
+// import { 
+//   getFirestore, 
+//   doc, 
+//   setDoc, 
+//   getDoc, 
+//   updateDoc,
+//   collection,
+//   addDoc 
+// } from 'firebase/firestore';
+
+// FIREBASE INTEGRATION POINT 2: Firebase config and initialization
+// const firebaseConfig = {
+//   apiKey: "your-api-key",
+//   authDomain: "your-project.firebaseapp.com",
+//   projectId: "your-project-id",
+//   storageBucket: "your-project.appspot.com",
+//   messagingSenderId: "123456789",
+//   appId: "your-app-id"
+// };
+// const app = initializeApp(firebaseConfig);
+// const auth = getAuth(app);
+// const db = getFirestore(app);
 
 interface AuthState {
   user: User | null;
@@ -27,7 +44,6 @@ interface AuthState {
   error: string | null;
   isGuest: boolean;
   hasSelectedRole: boolean;
-  isInitialized: boolean;
   
   // Actions
   setUser: (user: User | null) => void;
@@ -42,76 +58,13 @@ interface AuthState {
   checkAuth: () => Promise<boolean>;
   setHasSelectedRole: (value: boolean) => void;
   clearError: () => void;
-  initializeAuthListener: () => () => void;
-  setInitialized: (value: boolean) => void;
 }
 
-// Helper to remove undefined values from objects before saving to Firestore
-const removeUndefinedValues = (obj: any): any => {
-  const cleaned: any = {};
-  Object.keys(obj).forEach(key => {
-    if (obj[key] !== undefined && obj[key] !== null) {
-      cleaned[key] = obj[key];
-    }
-  });
-  return cleaned;
-};
+// Mock user database - FIREBASE INTEGRATION POINT 3: This would be replaced by Firestore
+const mockUsers: { [email: string]: { password: string; user: User } } = {};
 
-// Helper to convert Firebase user to our User type
-const convertFirebaseUser = async (firebaseUser: FirebaseUser): Promise<User | null> => {
-  try {
-    if (!db) {
-      console.error('Firestore not initialized');
-      return null;
-    }
-
-    const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-    
-    if (userDoc.exists()) {
-      const userData = userDoc.data();
-      return {
-        id: firebaseUser.uid,
-        name: userData.name || firebaseUser.displayName || '',
-        email: firebaseUser.email || '',
-        photoURL: userData.photoURL || firebaseUser.photoURL || undefined,
-        isSeller: userData.isSeller || false,
-        sellerModeActive: userData.sellerModeActive || false,
-        createdAt: userData.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        role: userData.role || 'buyer',
-      };
-    } else {
-      // Create user document if it doesn't exist
-      const newUser: User = {
-        id: firebaseUser.uid,
-        name: firebaseUser.displayName || '',
-        email: firebaseUser.email || '',
-        isSeller: false,
-        sellerModeActive: false,
-        createdAt: new Date().toISOString(),
-        role: 'buyer',
-      };
-      
-      // Only add photoURL if it exists
-      if (firebaseUser.photoURL) {
-        newUser.photoURL = firebaseUser.photoURL;
-      }
-      
-      // Remove undefined values before saving to Firestore
-      const cleanUserData = removeUndefinedValues({
-        ...newUser,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      
-      await setDoc(doc(db, 'users', firebaseUser.uid), cleanUserData);
-      
-      return newUser;
-    }
-  } catch (error) {
-    console.error('Error converting Firebase user:', error);
-    return null;
-  }
-};
+// Helper to generate user ID - FIREBASE INTEGRATION POINT 4: Firebase Auth provides user IDs
+const generateUserId = () => `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -122,7 +75,6 @@ export const useAuthStore = create<AuthState>()(
       error: null,
       isGuest: false,
       hasSelectedRole: false,
-      isInitialized: false,
       
       setUser: (user: User | null) => {
         set({ 
@@ -132,29 +84,44 @@ export const useAuthStore = create<AuthState>()(
         });
       },
       
-      setInitialized: (value: boolean) => {
-        set({ isInitialized: value });
-      },
-      
       login: async (email: string, password: string) => {
-        if (!auth) {
-          set({ error: 'Firebase not initialized' });
-          return false;
-        }
-        
         set({ isLoading: true, error: null });
         
         try {
-          const userCredential = await signInWithEmailAndPassword(auth, email, password);
-          const firebaseUser = userCredential.user;
+          // FIREBASE INTEGRATION POINT 5: Replace mock login with Firebase Auth
+          // const userCredential = await signInWithEmailAndPassword(auth, email, password);
+          // const firebaseUser = userCredential.user;
+          // 
+          // // Get user profile from Firestore
+          // const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          // if (!userDoc.exists()) {
+          //   throw new Error('User profile not found');
+          // }
+          // 
+          // const userData = userDoc.data() as User;
+          // set({ 
+          //   user: userData, 
+          //   isAuthenticated: true, 
+          //   isLoading: false, 
+          //   isGuest: false,
+          //   hasSelectedRole: false,
+          // });
           
-          const userData = await convertFirebaseUser(firebaseUser);
+          // Simulate network delay
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Check if user exists in mock database
+          const userData = mockUsers[email.toLowerCase()];
           if (!userData) {
-            throw new Error('Failed to load user profile');
+            throw new Error('No account found with this email address');
+          }
+          
+          if (userData.password !== password) {
+            throw new Error('Incorrect password');
           }
           
           set({ 
-            user: userData, 
+            user: userData.user, 
             isAuthenticated: true, 
             isLoading: false, 
             isGuest: false,
@@ -162,74 +129,70 @@ export const useAuthStore = create<AuthState>()(
           });
           return true;
         } catch (error: any) {
-          console.error('Login error:', error);
-          let errorMessage = 'Failed to login';
-          
-          switch (error.code) {
-            case 'auth/user-not-found':
-              errorMessage = 'No account found with this email address';
-              break;
-            case 'auth/wrong-password':
-              errorMessage = 'Incorrect password';
-              break;
-            case 'auth/invalid-email':
-              errorMessage = 'Invalid email address';
-              break;
-            case 'auth/user-disabled':
-              errorMessage = 'This account has been disabled';
-              break;
-            case 'auth/too-many-requests':
-              errorMessage = 'Too many failed attempts. Please try again later';
-              break;
-            default:
-              errorMessage = error.message || 'Failed to login';
-          }
-          
+          console.error('Login error in store:', error);
           set({ 
             isLoading: false, 
-            error: errorMessage 
+            error: error.message || 'Failed to login' 
           });
           return false;
         }
       },
       
       signup: async (email: string, password: string, name: string) => {
-        if (!auth) {
-          set({ error: 'Firebase not initialized' });
-          return false;
-        }
-        
         set({ isLoading: true, error: null });
         
         try {
-          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-          const firebaseUser = userCredential.user;
+          // FIREBASE INTEGRATION POINT 6: Replace mock signup with Firebase Auth + Firestore
+          // const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+          // const firebaseUser = userCredential.user;
+          // 
+          // const newUser: User = {
+          //   id: firebaseUser.uid,
+          //   name,
+          //   email: email.toLowerCase(),
+          //   isSeller: false,
+          //   sellerModeActive: false,
+          //   createdAt: new Date().toISOString(),
+          // };
+          // 
+          // // Save user profile to Firestore
+          // await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
+          // 
+          // set({ 
+          //   user: newUser, 
+          //   isAuthenticated: true, 
+          //   isLoading: false, 
+          //   isGuest: false,
+          //   hasSelectedRole: false,
+          // });
           
-          // Update Firebase Auth profile
-          await updateProfile(firebaseUser, {
-            displayName: name
-          });
+          // Simulate network delay
+          await new Promise(resolve => setTimeout(resolve, 1000));
           
+          // Check if user already exists
+          if (mockUsers[email.toLowerCase()]) {
+            throw new Error('An account with this email already exists');
+          }
+          
+          if (password.length < 6) {
+            throw new Error('Password should be at least 6 characters');
+          }
+          
+          // Create new user
           const newUser: User = {
-            id: firebaseUser.uid,
+            id: generateUserId(),
             name,
             email: email.toLowerCase(),
             isSeller: false,
             sellerModeActive: false,
             createdAt: new Date().toISOString(),
-            role: 'buyer',
           };
           
-          // Save user profile to Firestore (remove undefined values)
-          const cleanUserData = removeUndefinedValues({
-            ...newUser,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-          
-          if (db) {
-            await setDoc(doc(db, 'users', firebaseUser.uid), cleanUserData);
-          }
+          // Store in mock database
+          mockUsers[email.toLowerCase()] = {
+            password,
+            user: newUser
+          };
           
           set({ 
             user: newUser, 
@@ -240,44 +203,24 @@ export const useAuthStore = create<AuthState>()(
           });
           return true;
         } catch (error: any) {
-          console.error('Signup error:', error);
-          let errorMessage = 'Failed to sign up';
-          
-          switch (error.code) {
-            case 'auth/email-already-in-use':
-              errorMessage = 'An account with this email already exists';
-              break;
-            case 'auth/invalid-email':
-              errorMessage = 'Invalid email address';
-              break;
-            case 'auth/weak-password':
-              errorMessage = 'Password should be at least 6 characters';
-              break;
-            case 'auth/operation-not-allowed':
-              errorMessage = 'Email/password accounts are not enabled';
-              break;
-            default:
-              errorMessage = error.message || 'Failed to sign up';
-          }
-          
+          console.error('Signup error in store:', error);
           set({ 
             isLoading: false, 
-            error: errorMessage 
+            error: error.message || 'Failed to sign up' 
           });
           return false;
         }
       },
       
       logout: async () => {
-        if (!auth) {
-          set({ error: 'Firebase not initialized' });
-          return;
-        }
-        
         set({ isLoading: true, error: null });
         
         try {
-          await signOut(auth);
+          // FIREBASE INTEGRATION POINT 7: Replace with Firebase Auth signOut
+          // await signOut(auth);
+          
+          // Simulate network delay
+          await new Promise(resolve => setTimeout(resolve, 500));
           
           set({ 
             user: null, 
@@ -287,7 +230,7 @@ export const useAuthStore = create<AuthState>()(
             hasSelectedRole: false,
           });
         } catch (error: any) {
-          console.error('Logout error:', error);
+          console.error('Logout error in store:', error);
           set({ 
             isLoading: false, 
             error: error.message || 'Failed to logout' 
@@ -296,35 +239,30 @@ export const useAuthStore = create<AuthState>()(
       },
       
       resetPassword: async (email: string) => {
-        if (!auth) {
-          set({ error: 'Firebase not initialized' });
-          return false;
-        }
-        
         set({ isLoading: true, error: null });
         
         try {
-          await sendPasswordResetEmail(auth, email);
+          // FIREBASE INTEGRATION POINT 8: Replace with Firebase Auth password reset
+          // await sendPasswordResetEmail(auth, email);
+          
+          // Simulate network delay
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Check if user exists
+          if (!mockUsers[email.toLowerCase()]) {
+            throw new Error('No account found with this email address');
+          }
+          
+          // In a real app, this would send an email
+          console.log('Password reset email sent to:', email);
+          
           set({ isLoading: false });
           return true;
         } catch (error: any) {
-          console.error('Reset password error:', error);
-          let errorMessage = 'Failed to reset password';
-          
-          switch (error.code) {
-            case 'auth/user-not-found':
-              errorMessage = 'No account found with this email address';
-              break;
-            case 'auth/invalid-email':
-              errorMessage = 'Invalid email address';
-              break;
-            default:
-              errorMessage = error.message || 'Failed to reset password';
-          }
-          
+          console.error('Reset password error in store:', error);
           set({ 
             isLoading: false, 
-            error: errorMessage 
+            error: error.message || 'Failed to reset password' 
           });
           return false;
         }
@@ -336,28 +274,23 @@ export const useAuthStore = create<AuthState>()(
         
         try {
           const { user } = state;
-          if (!user || user.id === 'guest') {
+          if (!user) {
             throw new Error('User not authenticated');
           }
           
+          // FIREBASE INTEGRATION POINT 9: Replace with Firestore update
+          // const updatedUser = { ...user, ...data };
+          // await updateDoc(doc(db, 'users', user.id), data);
+          
+          // Simulate network delay
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Update user data
           const updatedUser = { ...user, ...data };
           
-          if (db) {
-            // Remove undefined values before updating Firestore
-            const cleanData = removeUndefinedValues({
-              ...data,
-              updatedAt: serverTimestamp(),
-            });
-            
-            // Update Firestore document
-            await updateDoc(doc(db, 'users', user.id), cleanData);
-          }
-          
-          // Update Firebase Auth profile if name changed
-          if (data.name && auth?.currentUser) {
-            await updateProfile(auth.currentUser, {
-              displayName: data.name
-            });
+          // Update in mock database if user exists
+          if (user.email && mockUsers[user.email]) {
+            mockUsers[user.email].user = updatedUser;
           }
           
           set({ 
@@ -366,7 +299,8 @@ export const useAuthStore = create<AuthState>()(
           });
           return true;
         } catch (error: any) {
-          console.error('Update profile error:', error);
+          console.error('Update profile error in store:', error);
+          
           set({ 
             isLoading: false, 
             error: error.message || 'Failed to update profile' 
@@ -381,24 +315,29 @@ export const useAuthStore = create<AuthState>()(
         
         try {
           const { user } = state;
-          if (!user || user.id === 'guest') {
+          if (!user) {
             throw new Error('User not authenticated');
           }
           
+          // FIREBASE INTEGRATION POINT 10: Replace with Firestore update
+          // await updateDoc(doc(db, 'users', user.id), { 
+          //   isSeller: true, 
+          //   sellerModeActive: true 
+          // });
+          
+          // Simulate network delay
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Update user to seller
           const updatedUser = { 
             ...user, 
             isSeller: true, 
-            sellerModeActive: true,
-            role: 'both' as const
+            sellerModeActive: true 
           };
           
-          if (db) {
-            await updateDoc(doc(db, 'users', user.id), { 
-              isSeller: true, 
-              sellerModeActive: true,
-              role: 'both',
-              updatedAt: serverTimestamp(),
-            });
+          // Update in mock database if user exists
+          if (user.email && mockUsers[user.email]) {
+            mockUsers[user.email].user = updatedUser;
           }
           
           set({ 
@@ -407,7 +346,8 @@ export const useAuthStore = create<AuthState>()(
           });
           return true;
         } catch (error: any) {
-          console.error('Upgrade to seller error:', error);
+          console.error('Upgrade to seller error in store:', error);
+          
           set({ 
             isLoading: false, 
             error: error.message || 'Failed to upgrade to seller' 
@@ -422,26 +362,32 @@ export const useAuthStore = create<AuthState>()(
         
         try {
           const { user } = state;
-          if (!user || !user.isSeller || user.id === 'guest') {
+          if (!user || !user.isSeller) {
             throw new Error('User is not a seller');
           }
+          
+          // FIREBASE INTEGRATION POINT 11: Replace with Firestore update
+          // await updateDoc(doc(db, 'users', user.id), { 
+          //   sellerModeActive: !user.sellerModeActive 
+          // });
+          
+          // Simulate network delay
+          await new Promise(resolve => setTimeout(resolve, 500));
           
           const updatedUser = { 
             ...user, 
             sellerModeActive: !user.sellerModeActive 
           };
           
-          if (db) {
-            await updateDoc(doc(db, 'users', user.id), { 
-              sellerModeActive: !user.sellerModeActive,
-              updatedAt: serverTimestamp(),
-            });
+          // Update in mock database if user exists
+          if (user.email && mockUsers[user.email]) {
+            mockUsers[user.email].user = updatedUser;
           }
           
           set({ user: updatedUser, isLoading: false });
           return true;
         } catch (error: any) {
-          console.error('Toggle seller mode error:', error);
+          console.error('Toggle seller mode error in store:', error);
           set({ 
             isLoading: false, 
             error: error.message || 'Failed to toggle seller mode' 
@@ -459,7 +405,6 @@ export const useAuthStore = create<AuthState>()(
             isSeller: false,
             sellerModeActive: false,
             createdAt: new Date().toISOString(),
-            role: 'buyer',
           },
           isAuthenticated: true,
           isGuest: true,
@@ -471,6 +416,33 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
+          // FIREBASE INTEGRATION POINT 12: Replace with Firebase Auth state listener
+          // This would typically be handled by onAuthStateChanged listener
+          // onAuthStateChanged(auth, async (firebaseUser) => {
+          //   if (firebaseUser) {
+          //     const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          //     if (userDoc.exists()) {
+          //       const userData = userDoc.data() as User;
+          //       set({ 
+          //         user: userData, 
+          //         isAuthenticated: true, 
+          //         isLoading: false,
+          //         isGuest: false 
+          //       });
+          //     }
+          //   } else {
+          //     set({ 
+          //       user: null, 
+          //       isAuthenticated: false, 
+          //       isLoading: false,
+          //       isGuest: false 
+          //     });
+          //   }
+          // });
+          
+          // Simulate network delay
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
           const state = get();
           if (state.user && !state.isGuest) {
             set({ isLoading: false });
@@ -499,69 +471,6 @@ export const useAuthStore = create<AuthState>()(
         }
       },
       
-      initializeAuthListener: () => {
-        if (!auth) {
-          console.error('Firebase auth not initialized');
-          set({ isInitialized: true });
-          return () => {};
-        }
-        
-        try {
-          const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-            const state = get();
-            
-            if (firebaseUser) {
-              try {
-                const userData = await convertFirebaseUser(firebaseUser);
-                if (userData) {
-                  set({ 
-                    user: userData, 
-                    isAuthenticated: true, 
-                    isLoading: false,
-                    isGuest: false,
-                    isInitialized: true
-                  });
-                } else {
-                  set({ 
-                    user: null, 
-                    isAuthenticated: false, 
-                    isLoading: false,
-                    isGuest: false,
-                    isInitialized: true
-                  });
-                }
-              } catch (error) {
-                console.error('Error in auth state change:', error);
-                set({ 
-                  user: null, 
-                  isAuthenticated: false, 
-                  isLoading: false,
-                  isGuest: false,
-                  isInitialized: true
-                });
-              }
-            } else if (!state.isGuest) {
-              set({ 
-                user: null, 
-                isAuthenticated: false, 
-                isLoading: false,
-                isGuest: false,
-                hasSelectedRole: false,
-                isInitialized: true
-              });
-            } else {
-              set({ isInitialized: true });
-            }
-          });
-          
-          return unsubscribe;
-        } catch (error) {
-          console.error('Error initializing auth listener:', error);
-          set({ isInitialized: true });
-          return () => {};
-        }
-      },
-      
       setHasSelectedRole: (value: boolean) => {
         set({ hasSelectedRole: value });
       },
@@ -582,3 +491,26 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
+
+// FIREBASE INTEGRATION POINT 13: Auth state listener setup
+// This would typically be called in your app's root component or _layout.tsx
+// export const initializeAuthListener = () => {
+//   const { setUser } = useAuthStore.getState();
+//   
+//   return onAuthStateChanged(auth, async (firebaseUser) => {
+//     if (firebaseUser) {
+//       try {
+//         const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+//         if (userDoc.exists()) {
+//           const userData = userDoc.data() as User;
+//           setUser(userData);
+//         }
+//       } catch (error) {
+//         console.error('Error fetching user data:', error);
+//         setUser(null);
+//       }
+//     } else {
+//       setUser(null);
+//     }
+//   });
+// };
