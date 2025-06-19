@@ -82,7 +82,8 @@ export default function PropertyDetailScreen() {
   };
 
   // Format the listed date safely
-  const formatListedDate = (dateString: string) => {
+  const formatListedDate = (dateString?: string) => {
+    if (!dateString) return 'Recently listed';
     try {
       return new Date(dateString).toLocaleDateString();
     } catch (error) {
@@ -124,7 +125,7 @@ export default function PropertyDetailScreen() {
             </View>
             <View style={styles.infoItem}>
               <Square size={20} color={colors.primary} />
-              <Text style={styles.infoText}>{property.sqft.toLocaleString()} sqft</Text>
+              <Text style={styles.infoText}>{property.sqft?.toLocaleString() || property.sqm?.toLocaleString() || 'N/A'} {property.sqft ? 'sqft' : 'sqm'}</Text>
             </View>
           </View>
           <TouchableOpacity style={styles.addressContainer} onPress={openMap}>

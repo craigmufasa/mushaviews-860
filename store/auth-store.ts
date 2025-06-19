@@ -18,6 +18,7 @@ interface AuthState {
   isLoading: boolean;
   isGuest: boolean;
   error: string | null;
+  isInitialized: boolean;
   
   // Actions
   login: (email: string, password: string) => Promise<boolean>;
@@ -27,11 +28,14 @@ interface AuthState {
   setGuest: (isGuest: boolean) => void;
   upgradeToSeller: () => Promise<boolean>;
   toggleSellerMode: () => Promise<boolean>;
+  checkAuth: () => Promise<void>;
+  initializeAuthListener: () => () => void;
   
   // Internal actions
   setUser: (user: User | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  setInitialized: (initialized: boolean) => void;
 }
 
 const convertFirebaseUser = (firebaseUser: FirebaseUser, additionalData?: Partial<User>): User => {
@@ -54,6 +58,7 @@ export const useAuthStore = create<AuthState>()(
       isLoading: false,
       isGuest: false,
       error: null,
+      isInitialized: false,
 
       login: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
@@ -106,17 +111,20 @@ export const useAuthStore = create<AuthState>()(
           const userCredential = await createUserWithEmailAndPassword(auth, email, password);
           const firebaseUser = userCredential.user;
           
-          // Create user document in Firestore - filter out undefined values
-          const userData = {
+          // Create user document in Firestore - only include defined values
+          const userData: any = {
             name,
             email,
             isSeller: false,
             sellerModeActive: false,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-            // Only include photoURL if it's not null/undefined
-            ...(firebaseUser.photoURL && { photoURL: firebaseUser.photoURL }),
           };
+          
+          // Only include photoURL if it exists and is not null/undefined
+          if (firebaseUser.photoURL) {
+            userData.photoURL = firebaseUser.photoURL;
+          }
           
           await setDoc(doc(db, 'users', firebaseUser.uid), userData);
           
@@ -242,10 +250,55 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      checkAuth: async () => {
+        set({ isLoading: true });
+        
+        try {
+          // Wait for auth state to be determined
+          await new Promise<void>((resolve) => {
+            const unsubscribe = onAuthStateChanged(auth, (user) => {
+              unsubscribe();
+              resolve();
+            });
+          });
+        } catch (error) {
+          console.error('Error checking auth:', error);
+        } finally {
+          set({ isLoading: false, isInitialized: true });
+        }
+      },
+
+      initializeAuthListener: () => {
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+          const { setUser, setLoading } = get();
+          
+          if (firebaseUser) {
+            try {
+              // Get additional user data from Firestore
+              const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+              const userData = userDoc.exists() ? userDoc.data() : {};
+              
+              const user = convertFirebaseUser(firebaseUser, userData);
+              setUser(user);
+            } catch (error) {
+              console.error('Error fetching user data:', error);
+              setUser(null);
+            }
+          } else {
+            setUser(null);
+          }
+          
+          set({ isInitialized: true });
+        });
+
+        return unsubscribe;
+      },
+
       // Internal actions
       setUser: (user: User | null) => set({ user }),
       setLoading: (isLoading: boolean) => set({ isLoading }),
       setError: (error: string | null) => set({ error }),
+      setInitialized: (isInitialized: boolean) => set({ isInitialized }),
     }),
     {
       name: 'auth-storage',
@@ -257,28 +310,3 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
-
-// Set up auth state listener
-if (auth) {
-  onAuthStateChanged(auth, async (firebaseUser) => {
-    const { setUser, setLoading } = useAuthStore.getState();
-    
-    if (firebaseUser) {
-      try {
-        // Get additional user data from Firestore
-        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-        const userData = userDoc.exists() ? userDoc.data() : {};
-        
-        const user = convertFirebaseUser(firebaseUser, userData);
-        setUser(user);
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-        setUser(null);
-      }
-    } else {
-      setUser(null);
-    }
-    
-    setLoading(false);
-  });
-}

@@ -18,11 +18,16 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Auth with proper typing
 let auth: Auth;
-if (Platform.OS === 'web') {
+try {
+  if (Platform.OS === 'web') {
+    auth = getAuth(app);
+  } else {
+    // For React Native, use initializeAuth
+    auth = initializeAuth(app);
+  }
+} catch (error) {
+  // If auth is already initialized, get the existing instance
   auth = getAuth(app);
-} else {
-  // For React Native, use initializeAuth
-  auth = initializeAuth(app);
 }
 
 // Initialize Firestore

@@ -9,6 +9,11 @@ interface PropertyFeaturesProps {
 }
 
 export const PropertyFeatures: React.FC<PropertyFeaturesProps> = ({ property }) => {
+  // Calculate sqft from sqm if sqft is not available
+  const displayArea = property.sqft || (property.sqm ? Math.round(property.sqm * 10.764) : null);
+  const areaUnit = property.sqft ? 'sqft' : 'sqm';
+  const areaValue = property.sqft ? property.sqft : property.sqm;
+
   return (
     <View style={styles.container}>
       <View style={styles.mainFeatures}>
@@ -20,26 +25,34 @@ export const PropertyFeatures: React.FC<PropertyFeaturesProps> = ({ property }) 
         
         <View style={styles.featureItem}>
           <Ruler size={20} color={colors.primary} />
-          <Text style={styles.featureValue}>{property.sqft.toLocaleString()}</Text>
-          <Text style={styles.featureLabel}>Square Feet</Text>
+          <Text style={styles.featureValue}>
+            {areaValue?.toLocaleString() || 'N/A'}
+          </Text>
+          <Text style={styles.featureLabel}>
+            {areaUnit === 'sqft' ? 'Square Feet' : 'Square Metres'}
+          </Text>
         </View>
         
         <View style={styles.featureItem}>
           <Calendar size={20} color={colors.primary} />
-          <Text style={styles.featureValue}>{property.yearBuilt}</Text>
+          <Text style={styles.featureValue}>{property.yearBuilt || 'N/A'}</Text>
           <Text style={styles.featureLabel}>Year Built</Text>
         </View>
       </View>
       
-      <Text style={styles.featuresTitle}>Features</Text>
-      <View style={styles.featuresList}>
-        {property.features.map((feature, index) => (
-          <View key={index} style={styles.featureListItem}>
-            <CheckCircle size={16} color={colors.primary} />
-            <Text style={styles.featureText}>{feature}</Text>
+      {property.features && property.features.length > 0 && (
+        <>
+          <Text style={styles.featuresTitle}>Features</Text>
+          <View style={styles.featuresList}>
+            {property.features.map((feature, index) => (
+              <View key={index} style={styles.featureListItem}>
+                <CheckCircle size={16} color={colors.primary} />
+                <Text style={styles.featureText}>{feature}</Text>
+              </View>
+            ))}
           </View>
-        ))}
-      </View>
+        </>
+      )}
     </View>
   );
 };
