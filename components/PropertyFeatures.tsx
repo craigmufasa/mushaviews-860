@@ -10,15 +10,21 @@ interface PropertyFeaturesProps {
 }
 
 export const PropertyFeatures: React.FC<PropertyFeaturesProps> = ({ property }) => {
+  // Safely handle property values with fallbacks
+  const sqm = property?.sqm || 0;
+  const yearBuilt = property?.yearBuilt;
+  const type = property?.type || 'N/A';
+  const features = property?.features || [];
+  
   // Convert sqm to sqft (1 sqm = 10.764 sqft)
-  const sqftValue = property.sqm ? Math.round(property.sqm * 10.764) : 0;
+  const sqftValue = sqm > 0 ? Math.round(sqm * 10.764) : 0;
   
   return (
     <View style={styles.container}>
       <View style={styles.mainFeatures}>
         <View style={styles.featureItem}>
           <Home size={20} color={colors.primary} />
-          <Text style={styles.featureValue}>{property.type || 'N/A'}</Text>
+          <Text style={styles.featureValue}>{type}</Text>
           <Text style={styles.featureLabel}>Type</Text>
         </View>
         
@@ -30,20 +36,24 @@ export const PropertyFeatures: React.FC<PropertyFeaturesProps> = ({ property }) 
         
         <View style={styles.featureItem}>
           <Calendar size={20} color={colors.primary} />
-          <Text style={styles.featureValue}>{property.yearBuilt || 'N/A'}</Text>
+          <Text style={styles.featureValue}>{yearBuilt || 'N/A'}</Text>
           <Text style={styles.featureLabel}>Year Built</Text>
         </View>
       </View>
       
-      <Text style={styles.featuresTitle}>Features</Text>
-      <View style={styles.featuresList}>
-        {(property.features || []).map((feature, index) => (
-          <View key={index} style={styles.featureListItem}>
-            <CheckCircle size={16} color={colors.primary} />
-            <Text style={styles.featureText}>{feature}</Text>
+      {features.length > 0 && (
+        <>
+          <Text style={styles.featuresTitle}>Features</Text>
+          <View style={styles.featuresList}>
+            {features.map((feature, index) => (
+              <View key={index} style={styles.featureListItem}>
+                <CheckCircle size={16} color={colors.primary} />
+                <Text style={styles.featureText}>{feature}</Text>
+              </View>
+            ))}
           </View>
-        ))}
-      </View>
+        </>
+      )}
     </View>
   );
 };

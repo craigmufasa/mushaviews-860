@@ -35,10 +35,13 @@ export default function RootLayout() {
 
         console.log('Initializing Firebase app...');
         
+        // Add a longer delay to ensure Firebase is fully initialized
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
         // Initialize Firebase auth listener first
         const unsubscribeAuth = initializeAuthListener();
         
-        // Wait a bit for Firebase to initialize
+        // Wait a bit more for Firebase auth to initialize
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         // Initialize property listener
@@ -52,8 +55,12 @@ export default function RootLayout() {
         
         // Cleanup function
         return () => {
-          unsubscribeAuth();
-          unsubscribeProperties();
+          if (typeof unsubscribeAuth === 'function') {
+            unsubscribeAuth();
+          }
+          if (typeof unsubscribeProperties === 'function') {
+            unsubscribeProperties();
+          }
         };
       } catch (error: any) {
         console.error('Error initializing Firebase app:', error);
@@ -63,16 +70,16 @@ export default function RootLayout() {
       }
     };
     
-    const cleanup = initializeApp();
+    let cleanup: (() => void) | undefined;
+    
+    initializeApp().then((cleanupFn) => {
+      cleanup = cleanupFn;
+    });
     
     // Return cleanup function
     return () => {
-      if (cleanup instanceof Promise) {
-        cleanup.then(cleanupFn => {
-          if (typeof cleanupFn === 'function') {
-            cleanupFn();
-          }
-        });
+      if (cleanup) {
+        cleanup();
       }
     };
   }, [loaded, checkAuth, initializeAuthListener, initializePropertyListener]);

@@ -27,8 +27,9 @@ try {
     auth = getAuth(app);
   } else {
     // For React Native, use initializeAuth with AsyncStorage persistence
+    const { getReactNativePersistence } = require('firebase/auth/react-native');
     auth = initializeAuth(app, {
-      persistence: AsyncStorage as any
+      persistence: getReactNativePersistence(AsyncStorage)
     });
   }
 } catch (error: any) {

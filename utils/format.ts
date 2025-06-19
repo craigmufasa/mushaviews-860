@@ -1,6 +1,6 @@
-export const formatPrice = (price: number): string => {
-  // Handle undefined or null values
-  if (price === undefined || price === null || isNaN(price)) {
+export const formatPrice = (price: number | undefined | null): string => {
+  // Handle undefined, null, or invalid values
+  if (price === undefined || price === null || isNaN(price) || price < 0) {
     return 'Price not available';
   }
   
@@ -24,16 +24,20 @@ export const formatDate = (date: Date | string | undefined | null): string => {
   }
   
   try {
+    let dateObj: Date;
+    
     if (typeof date === 'string') {
-      date = new Date(date);
+      dateObj = new Date(date);
+    } else {
+      dateObj = date;
     }
     
     // Check if date is valid
-    if (isNaN(date.getTime())) {
+    if (isNaN(dateObj.getTime())) {
       return 'Invalid date';
     }
     
-    return date.toLocaleDateString('en-US', {
+    return dateObj.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -60,9 +64,14 @@ export const formatAddress = (property: { address?: string; city?: string; state
 };
 
 export const formatNumber = (num: number | undefined | null): string => {
-  if (num === undefined || num === null || isNaN(num)) {
+  if (num === undefined || num === null || isNaN(num) || num < 0) {
     return '0';
   }
   
-  return num.toLocaleString();
+  try {
+    return num.toLocaleString();
+  } catch (error) {
+    console.error('Error formatting number:', error);
+    return '0';
+  }
 };
