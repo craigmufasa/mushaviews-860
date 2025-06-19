@@ -10,7 +10,8 @@ import {
   sendPasswordResetEmail,
   onAuthStateChanged,
   User as FirebaseUser,
-  updateProfile
+  updateProfile,
+  Auth
 } from 'firebase/auth';
 import { 
   doc, 
@@ -55,7 +56,7 @@ const convertFirebaseUser = async (firebaseUser: FirebaseUser): Promise<User | n
         id: firebaseUser.uid,
         name: userData.name || firebaseUser.displayName || '',
         email: firebaseUser.email || '',
-        photoURL: userData.photoURL || firebaseUser.photoURL,
+        photoURL: userData.photoURL || firebaseUser.photoURL || undefined,
         isSeller: userData.isSeller || false,
         sellerModeActive: userData.sellerModeActive || false,
         createdAt: userData.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
@@ -67,7 +68,7 @@ const convertFirebaseUser = async (firebaseUser: FirebaseUser): Promise<User | n
         id: firebaseUser.uid,
         name: firebaseUser.displayName || '',
         email: firebaseUser.email || '',
-        photoURL: firebaseUser.photoURL,
+        photoURL: firebaseUser.photoURL || undefined,
         isSeller: false,
         sellerModeActive: false,
         createdAt: new Date().toISOString(),
@@ -110,7 +111,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          const userCredential = await signInWithEmailAndPassword(auth, email, password);
+          const userCredential = await signInWithEmailAndPassword(auth as Auth, email, password);
           const firebaseUser = userCredential.user;
           
           const userData = await convertFirebaseUser(firebaseUser);
@@ -162,7 +163,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+          const userCredential = await createUserWithEmailAndPassword(auth as Auth, email, password);
           const firebaseUser = userCredential.user;
           
           // Update Firebase Auth profile
@@ -228,7 +229,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          await signOut(auth);
+          await signOut(auth as Auth);
           
           set({ 
             user: null, 
@@ -250,7 +251,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          await sendPasswordResetEmail(auth, email);
+          await sendPasswordResetEmail(auth as Auth, email);
           set({ isLoading: false });
           return true;
         } catch (error: any) {
@@ -295,8 +296,8 @@ export const useAuthStore = create<AuthState>()(
           });
           
           // Update Firebase Auth profile if name changed
-          if (data.name && auth.currentUser) {
-            await updateProfile(auth.currentUser, {
+          if (data.name && (auth as Auth).currentUser) {
+            await updateProfile((auth as Auth).currentUser!, {
               displayName: data.name
             });
           }
@@ -437,7 +438,7 @@ export const useAuthStore = create<AuthState>()(
       },
       
       initializeAuthListener: () => {
-        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        const unsubscribe = onAuthStateChanged(auth as Auth, async (firebaseUser) => {
           const state = get();
           
           if (firebaseUser) {
