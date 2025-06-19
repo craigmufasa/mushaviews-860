@@ -56,6 +56,10 @@ interface PropertyState {
 
 // Helper to upload property images to Firebase Storage
 const uploadPropertyImages = async (images: string[], propertyId: string): Promise<string[]> => {
+  if (!storage) {
+    throw new Error('Firebase Storage not initialized');
+  }
+  
   const uploadPromises = images.map(async (imageUri, index) => {
     try {
       const response = await fetch(imageUri);
@@ -73,6 +77,11 @@ const uploadPropertyImages = async (images: string[], propertyId: string): Promi
 
 // Helper to delete property images from Firebase Storage
 const deletePropertyImages = async (imageUrls: string[]): Promise<void> => {
+  if (!storage) {
+    console.warn('Firebase Storage not initialized, cannot delete images');
+    return;
+  }
+  
   const deletePromises = imageUrls.map(async (url) => {
     try {
       const imageRef = ref(storage, url);
@@ -174,6 +183,11 @@ export const usePropertyStore = create<PropertyState>()(
       },
       
       fetchProperties: async (forceRefresh = false) => {
+        if (!db) {
+          set({ error: 'Firestore not initialized' });
+          return;
+        }
+        
         set({ isLoading: true, error: null });
         
         try {
@@ -201,6 +215,11 @@ export const usePropertyStore = create<PropertyState>()(
       },
       
       fetchSellerProperties: async (sellerId: string) => {
+        if (!db) {
+          set({ error: 'Firestore not initialized' });
+          return [];
+        }
+        
         set({ isLoading: true, error: null });
         try {
           const propertiesRef = collection(db, 'properties');
@@ -229,6 +248,10 @@ export const usePropertyStore = create<PropertyState>()(
       },
       
       addProperty: async (property: Omit<Property, 'id'>, images: string[]) => {
+        if (!db) {
+          throw new Error('Firestore not initialized');
+        }
+        
         set({ isLoading: true, error: null });
         
         try {
@@ -274,6 +297,10 @@ export const usePropertyStore = create<PropertyState>()(
       },
       
       updateProperty: async (id: string, property: Partial<Property>, newImages?: string[]) => {
+        if (!db) {
+          throw new Error('Firestore not initialized');
+        }
+        
         set({ isLoading: true, error: null });
         
         try {
@@ -330,6 +357,11 @@ export const usePropertyStore = create<PropertyState>()(
       },
       
       deleteProperty: async (id: string) => {
+        if (!db) {
+          set({ error: 'Firestore not initialized' });
+          return false;
+        }
+        
         set({ isLoading: true, error: null });
         
         try {
@@ -365,6 +397,10 @@ export const usePropertyStore = create<PropertyState>()(
       },
 
       getPropertyById: async (id: string) => {
+        if (!db) {
+          return null;
+        }
+        
         try {
           const propertyRef = doc(db, 'properties', id);
           const propertyDoc = await getDoc(propertyRef);
@@ -380,22 +416,32 @@ export const usePropertyStore = create<PropertyState>()(
       },
 
       initializePropertyListener: () => {
-        const propertiesRef = collection(db, 'properties');
-        const q = query(propertiesRef, orderBy('createdAt', 'desc'));
+        if (!db) {
+          console.error('Firestore not initialized');
+          return () => {};
+        }
         
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
-          const updatedProperties: Property[] = [];
-          querySnapshot.forEach((doc) => {
-            updatedProperties.push(convertFirestoreProperty(doc));
+        try {
+          const propertiesRef = collection(db, 'properties');
+          const q = query(propertiesRef, orderBy('createdAt', 'desc'));
+          
+          const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            const updatedProperties: Property[] = [];
+            querySnapshot.forEach((doc) => {
+              updatedProperties.push(convertFirestoreProperty(doc));
+            });
+            
+            set({ properties: updatedProperties });
+          }, (error) => {
+            console.error('Error in property listener:', error);
+            set({ error: 'Failed to sync properties' });
           });
           
-          set({ properties: updatedProperties });
-        }, (error) => {
-          console.error('Error in property listener:', error);
-          set({ error: 'Failed to sync properties' });
-        });
-        
-        return unsubscribe;
+          return unsubscribe;
+        } catch (error) {
+          console.error('Error initializing property listener:', error);
+          return () => {};
+        }
       },
     }),
     {

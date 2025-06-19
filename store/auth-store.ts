@@ -60,6 +60,11 @@ const removeUndefinedValues = (obj: any): any => {
 // Helper to convert Firebase user to our User type
 const convertFirebaseUser = async (firebaseUser: FirebaseUser): Promise<User | null> => {
   try {
+    if (!db) {
+      console.error('Firestore not initialized');
+      return null;
+    }
+
     const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
     
     if (userDoc.exists()) {
@@ -222,7 +227,9 @@ export const useAuthStore = create<AuthState>()(
             updatedAt: serverTimestamp(),
           });
           
-          await setDoc(doc(db, 'users', firebaseUser.uid), cleanUserData);
+          if (db) {
+            await setDoc(doc(db, 'users', firebaseUser.uid), cleanUserData);
+          }
           
           set({ 
             user: newUser, 
@@ -335,14 +342,16 @@ export const useAuthStore = create<AuthState>()(
           
           const updatedUser = { ...user, ...data };
           
-          // Remove undefined values before updating Firestore
-          const cleanData = removeUndefinedValues({
-            ...data,
-            updatedAt: serverTimestamp(),
-          });
-          
-          // Update Firestore document
-          await updateDoc(doc(db, 'users', user.id), cleanData);
+          if (db) {
+            // Remove undefined values before updating Firestore
+            const cleanData = removeUndefinedValues({
+              ...data,
+              updatedAt: serverTimestamp(),
+            });
+            
+            // Update Firestore document
+            await updateDoc(doc(db, 'users', user.id), cleanData);
+          }
           
           // Update Firebase Auth profile if name changed
           if (data.name && auth?.currentUser) {
@@ -383,12 +392,14 @@ export const useAuthStore = create<AuthState>()(
             role: 'both' as const
           };
           
-          await updateDoc(doc(db, 'users', user.id), { 
-            isSeller: true, 
-            sellerModeActive: true,
-            role: 'both',
-            updatedAt: serverTimestamp(),
-          });
+          if (db) {
+            await updateDoc(doc(db, 'users', user.id), { 
+              isSeller: true, 
+              sellerModeActive: true,
+              role: 'both',
+              updatedAt: serverTimestamp(),
+            });
+          }
           
           set({ 
             user: updatedUser, 
@@ -420,10 +431,12 @@ export const useAuthStore = create<AuthState>()(
             sellerModeActive: !user.sellerModeActive 
           };
           
-          await updateDoc(doc(db, 'users', user.id), { 
-            sellerModeActive: !user.sellerModeActive,
-            updatedAt: serverTimestamp(),
-          });
+          if (db) {
+            await updateDoc(doc(db, 'users', user.id), { 
+              sellerModeActive: !user.sellerModeActive,
+              updatedAt: serverTimestamp(),
+            });
+          }
           
           set({ user: updatedUser, isLoading: false });
           return true;
@@ -489,49 +502,64 @@ export const useAuthStore = create<AuthState>()(
       initializeAuthListener: () => {
         if (!auth) {
           console.error('Firebase auth not initialized');
+          set({ isInitialized: true });
           return () => {};
         }
         
-        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-          const state = get();
-          
-          if (firebaseUser) {
-            try {
-              const userData = await convertFirebaseUser(firebaseUser);
-              if (userData) {
+        try {
+          const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+            const state = get();
+            
+            if (firebaseUser) {
+              try {
+                const userData = await convertFirebaseUser(firebaseUser);
+                if (userData) {
+                  set({ 
+                    user: userData, 
+                    isAuthenticated: true, 
+                    isLoading: false,
+                    isGuest: false,
+                    isInitialized: true
+                  });
+                } else {
+                  set({ 
+                    user: null, 
+                    isAuthenticated: false, 
+                    isLoading: false,
+                    isGuest: false,
+                    isInitialized: true
+                  });
+                }
+              } catch (error) {
+                console.error('Error in auth state change:', error);
                 set({ 
-                  user: userData, 
-                  isAuthenticated: true, 
+                  user: null, 
+                  isAuthenticated: false, 
                   isLoading: false,
                   isGuest: false,
                   isInitialized: true
                 });
               }
-            } catch (error) {
-              console.error('Error in auth state change:', error);
+            } else if (!state.isGuest) {
               set({ 
                 user: null, 
                 isAuthenticated: false, 
                 isLoading: false,
                 isGuest: false,
+                hasSelectedRole: false,
                 isInitialized: true
               });
+            } else {
+              set({ isInitialized: true });
             }
-          } else if (!state.isGuest) {
-            set({ 
-              user: null, 
-              isAuthenticated: false, 
-              isLoading: false,
-              isGuest: false,
-              hasSelectedRole: false,
-              isInitialized: true
-            });
-          } else {
-            set({ isInitialized: true });
-          }
-        });
-        
-        return unsubscribe;
+          });
+          
+          return unsubscribe;
+        } catch (error) {
+          console.error('Error initializing auth listener:', error);
+          set({ isInitialized: true });
+          return () => {};
+        }
       },
       
       setHasSelectedRole: (value: boolean) => {

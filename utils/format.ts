@@ -4,18 +4,23 @@ export const formatPrice = (price: number | undefined | null): string => {
     return 'Price not available';
   }
   
-  // For prices over 1 million, format as $X.XM
-  if (price >= 1000000) {
-    return `$${(price / 1000000).toFixed(1)}M`;
+  try {
+    // For prices over 1 million, format as $X.XM
+    if (price >= 1000000) {
+      return `$${(price / 1000000).toFixed(1)}M`;
+    }
+    
+    // For rental prices under 10000, assume it's monthly rent
+    if (price < 10000) {
+      return `$${price.toLocaleString()}/mo`;
+    }
+    
+    // Otherwise format with commas
+    return `$${price.toLocaleString()}`;
+  } catch (error) {
+    console.error('Error formatting price:', error);
+    return 'Price not available';
   }
-  
-  // For rental prices under 10000, assume it's monthly rent
-  if (price < 10000) {
-    return `$${price.toLocaleString()}/mo`;
-  }
-  
-  // Otherwise format with commas
-  return `$${price.toLocaleString()}`;
 };
 
 export const formatDate = (date: Date | string | undefined | null): string => {

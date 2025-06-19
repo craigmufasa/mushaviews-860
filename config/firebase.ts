@@ -1,8 +1,7 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, initializeAuth, Auth } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 // Firebase configuration
@@ -19,35 +18,36 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase Auth with proper persistence and typing
-let auth: Auth;
-
-try {
-  if (Platform.OS === 'web') {
-    auth = getAuth(app);
-  } else {
-    // For React Native, use initializeAuth with AsyncStorage persistence
-    const { getReactNativePersistence } = require('firebase/auth/react-native');
-    auth = initializeAuth(app, {
-      persistence: getReactNativePersistence(AsyncStorage)
-    });
-  }
-} catch (error: any) {
-  // If already initialized, get the existing instance
-  if (error.code === 'auth/already-initialized') {
-    auth = getAuth(app);
-  } else {
-    // Fallback to getAuth if initializeAuth fails
-    console.warn('Failed to initialize auth with persistence, falling back to getAuth:', error);
-    auth = getAuth(app);
-  }
-}
-
-// Initialize Firestore
+// Initialize Firebase services
+const auth = getAuth(app);
 const db = getFirestore(app);
-
-// Initialize Firebase Storage
 const storage = getStorage(app);
+
+// Configure auth persistence for React Native
+if (Platform.OS !== 'web') {
+  // Import AsyncStorage and configure persistence only for React Native
+  import('@react-native-async-storage/async-storage').then((AsyncStorage) => {
+    import('firebase/auth/react-native').then(({ getReactNativePersistence, initializeAuth }) => {
+      try {
+        // Only initialize if not already initialized
+        if (!auth.app) {
+          initializeAuth(app, {
+            persistence: getReactNativePersistence(AsyncStorage.default)
+          });
+        }
+      } catch (error: any) {
+        // Auth might already be initialized, which is fine
+        if (error.code !== 'auth/already-initialized') {
+          console.warn('Firebase auth initialization warning:', error);
+        }
+      }
+    }).catch((error) => {
+      console.warn('Failed to configure Firebase auth persistence:', error);
+    });
+  }).catch((error) => {
+    console.warn('Failed to import AsyncStorage:', error);
+  });
+}
 
 export { auth, db, storage };
 export default app;

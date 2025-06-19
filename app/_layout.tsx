@@ -33,37 +33,47 @@ export default function RootLayout() {
           return;
         }
 
-        console.log('Initializing Firebase app...');
+        console.log('Initializing app...');
         
-        // Add a longer delay to ensure Firebase is fully initialized
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Initialize Firebase auth listener first
-        const unsubscribeAuth = initializeAuthListener();
-        
-        // Wait a bit more for Firebase auth to initialize
+        // Simple delay to ensure Firebase is ready
         await new Promise(resolve => setTimeout(resolve, 1000));
         
-        // Initialize property listener
-        const unsubscribeProperties = initializePropertyListener();
+        // Initialize Firebase listeners
+        let unsubscribeAuth: (() => void) | undefined;
+        let unsubscribeProperties: (() => void) | undefined;
+        
+        try {
+          unsubscribeAuth = initializeAuthListener();
+          unsubscribeProperties = initializePropertyListener();
+        } catch (error) {
+          console.warn('Error initializing Firebase listeners:', error);
+        }
         
         // Check authentication
-        await checkAuth();
+        try {
+          await checkAuth();
+        } catch (error) {
+          console.warn('Error checking auth:', error);
+        }
         
-        console.log('Firebase app initialization completed');
+        console.log('App initialization completed');
         setAppReady(true);
         
-        // Cleanup function
+        // Return cleanup function
         return () => {
-          if (typeof unsubscribeAuth === 'function') {
-            unsubscribeAuth();
-          }
-          if (typeof unsubscribeProperties === 'function') {
-            unsubscribeProperties();
+          try {
+            if (typeof unsubscribeAuth === 'function') {
+              unsubscribeAuth();
+            }
+            if (typeof unsubscribeProperties === 'function') {
+              unsubscribeProperties();
+            }
+          } catch (error) {
+            console.warn('Error during cleanup:', error);
           }
         };
       } catch (error: any) {
-        console.error('Error initializing Firebase app:', error);
+        console.error('Error initializing app:', error);
         setInitError(error.message || 'Failed to initialize app');
         // Continue anyway to prevent app from being stuck
         setAppReady(true);

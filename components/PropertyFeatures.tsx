@@ -17,7 +17,7 @@ export const PropertyFeatures: React.FC<PropertyFeaturesProps> = ({ property }) 
   const features = property?.features || [];
   
   // Convert sqm to sqft (1 sqm = 10.764 sqft)
-  const sqftValue = sqm > 0 ? Math.round(sqm * 10.764) : 0;
+  const sqftValue = sqm && sqm > 0 ? Math.round(sqm * 10.764) : 0;
   
   return (
     <View style={styles.container}>
