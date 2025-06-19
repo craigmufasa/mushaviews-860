@@ -61,6 +61,7 @@ export default function PropertyDetailScreen() {
   };
 
   const handleContact = () => {
+    // In a real app, this would open a contact form or initiate a call
     alert('Contact feature would be implemented here');
   };
 
@@ -81,21 +82,13 @@ export default function PropertyDetailScreen() {
     setTourModalVisible(true);
   };
 
-  // Format the listed date safely
-  const formatListedDate = (dateString?: string) => {
-    if (!dateString) return 'Recently listed';
-    try {
-      return new Date(dateString).toLocaleDateString();
-    } catch (error) {
-      return 'Recently listed';
-    }
-  };
-
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <PropertyImageGallery images={property.images} />
+        
         <View style={styles.content}>
+          {/* Price and Actions */}
           <View style={styles.priceContainer}>
             <Text style={styles.price}>{formatPrice(property.price)}</Text>
             <View style={styles.actions}>
@@ -114,6 +107,8 @@ export default function PropertyDetailScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          
+          {/* Basic Info */}
           <View style={styles.infoRow}>
             <View style={styles.infoItem}>
               <Bed size={20} color={colors.primary} />
@@ -125,36 +120,50 @@ export default function PropertyDetailScreen() {
             </View>
             <View style={styles.infoItem}>
               <Square size={20} color={colors.primary} />
-              <Text style={styles.infoText}>{property.sqft?.toLocaleString() || property.sqm?.toLocaleString() || 'N/A'} {property.sqft ? 'sqft' : 'sqm'}</Text>
+              <Text style={styles.infoText}>{property.sqft.toLocaleString()} sqft</Text>
             </View>
           </View>
+          
+          {/* Address */}
           <TouchableOpacity style={styles.addressContainer} onPress={openMap}>
             <MapPin size={18} color={colors.primary} />
             <Text style={styles.address}>{formatAddress(property)}</Text>
           </TouchableOpacity>
+          
+          {/* 3D Tour Button */}
           {property.has3DTour && property.tourRooms && (
             <TouchableOpacity style={styles.tourButton} onPress={openTour}>
               <Box size={20} color="white" />
               <Text style={styles.tourButtonText}>Take 3D Tour</Text>
             </TouchableOpacity>
           )}
+          
+          {/* Description */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Description</Text>
             <Text style={styles.description}>{property.description}</Text>
           </View>
+          
+          {/* Features */}
           <PropertyFeatures property={property} />
+          
+          {/* Listed Date */}
           <View style={styles.listedDateContainer}>
             <Text style={styles.listedDateText}>
-              Listed on {formatListedDate(property.listedDate)}
+              Listed on {new Date(property.listedDate).toLocaleDateString()}
             </Text>
           </View>
         </View>
       </ScrollView>
+      
+      {/* Contact Button */}
       <View style={styles.footer}>
         <TouchableOpacity style={styles.contactButton} onPress={handleContact}>
           <Text style={styles.contactButtonText}>Contact Agent</Text>
         </TouchableOpacity>
       </View>
+
+      {/* 3D Tour Modal */}
       {property.has3DTour && property.tourRooms && (
         <Modal
           visible={tourModalVisible}

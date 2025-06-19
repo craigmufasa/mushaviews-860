@@ -31,11 +31,6 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress })
     toggleFavorite(property.id);
   };
 
-  // Calculate sqft from sqm if sqft is not available
-  const displayArea = property.sqft || (property.sqm ? Math.round(property.sqm * 10.764) : null);
-  const areaUnit = property.sqft ? 'sqft' : 'sqm';
-  const areaValue = property.sqft ? property.sqft : property.sqm;
-
   return (
     <Pressable style={styles.container} onPress={handlePress}>
       <View style={styles.imageContainer}>
@@ -58,6 +53,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress })
              property.status === 'sold' ? 'Sold' : 'Pending'}
           </Text>
         </View>
+        
         {property.has3DTour && (
           <View style={styles.tourBadge}>
             <Box size={16} color="white" />
@@ -65,6 +61,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress })
           </View>
         )}
       </View>
+      
       <View style={styles.detailsContainer}>
         <Text style={styles.price}>{formatPrice(property.price)}</Text>
         <View style={styles.specs}>
@@ -72,9 +69,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onPress })
           <Text style={styles.specsDivider}>|</Text>
           <Text style={styles.specsText}>{property.baths} ba</Text>
           <Text style={styles.specsDivider}>|</Text>
-          <Text style={styles.specsText}>
-            {areaValue?.toLocaleString() || 'N/A'} {areaUnit}
-          </Text>
+          <Text style={styles.specsText}>{property.sqm?.toLocaleString() || 'N/A'} sqm</Text>
         </View>
         <Text style={styles.address} numberOfLines={1}>
           {property.address}
