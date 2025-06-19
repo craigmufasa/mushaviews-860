@@ -27,9 +27,7 @@ export default function Add3DTourScreen() {
   const { 
     properties, 
     updateProperty, 
-    isLoading,
-    isOfflineMode,
-    pendingUploads
+    isLoading
   } = usePropertyStore();
   
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
@@ -98,7 +96,13 @@ export default function Add3DTourScreen() {
       setEmbedUrl(property.embedUrl);
     }
     if (property?.embedSettings) {
-      setEmbedSettings(property.embedSettings);
+      // Fix TypeScript error by providing default values for optional properties
+      setEmbedSettings({
+        allowFullscreen: property.embedSettings.allowFullscreen ?? true,
+        autoplay: property.embedSettings.autoplay ?? false,
+        showControls: property.embedSettings.showControls ?? true,
+        responsive: property.embedSettings.responsive ?? true,
+      });
     }
     if (property?.tourRooms) {
       setRooms(property.tourRooms);
@@ -250,7 +254,7 @@ export default function Add3DTourScreen() {
     }
 
     // Show offline warning if applicable
-    if (!isOnline || isOfflineMode) {
+    if (!isOnline) {
       Alert.alert(
         'Offline Mode',
         'Your 3D tour will be saved locally and uploaded when you come back online.',
@@ -288,7 +292,7 @@ export default function Add3DTourScreen() {
 
       await updateProperty(selectedProperty!.id, updateData);
 
-      const successMessage = isOfflineMode || !isOnline 
+      const successMessage = !isOnline 
         ? '3D tour saved offline successfully. It will be uploaded when you come back online.'
         : '3D tour added successfully';
 
@@ -393,27 +397,20 @@ export default function Add3DTourScreen() {
       {/* Status bar */}
       <View style={styles.statusBar}>
         <View style={styles.statusLeft}>
-          {isOnline && !isOfflineMode ? (
+          {isOnline ? (
             <Wifi size={16} color={colors.success} />
           ) : (
             <WifiOff size={16} color={colors.warning} />
           )}
           <Text style={styles.statusText}>
-            {isOnline && !isOfflineMode ? 'Online' : 'Offline Mode'}
+            {isOnline ? 'Online' : 'Offline Mode'}
           </Text>
         </View>
-        
-        {pendingUploads.length > 0 && (
-          <View style={styles.pendingIndicator}>
-            <Upload size={16} color={colors.warning} />
-            <Text style={styles.pendingText}>{pendingUploads.length} Pending</Text>
-          </View>
-        )}
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
         {/* Offline warning */}
-        {(!isOnline || isOfflineMode) && (
+        {!isOnline && (
           <View style={styles.offlineWarning}>
             <AlertCircle size={20} color={colors.warning} />
             <Text style={styles.offlineWarningText}>
@@ -917,7 +914,7 @@ export default function Add3DTourScreen() {
                 <>
                   <Upload size={20} color="white" />
                   <Text style={styles.submitButtonText}>
-                    {(!isOnline || isOfflineMode) ? 'Save 3D Tour Offline' : 'Save 3D Tour'}
+                    {!isOnline ? 'Save 3D Tour Offline' : 'Save 3D Tour'}
                   </Text>
                 </>
               )}
