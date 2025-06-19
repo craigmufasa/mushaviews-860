@@ -27,7 +27,9 @@ export default function Add3DTourScreen() {
   const { 
     properties, 
     updateProperty, 
-    isLoading
+    isLoading,
+    isOfflineMode,
+    pendingUploads
   } = usePropertyStore();
   
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
@@ -48,7 +50,7 @@ export default function Add3DTourScreen() {
   const [showPanoramaCapture, setShowPanoramaCapture] = useState(false);
   const [showWebViewPreview, setShowWebViewPreview] = useState(false);
   
-  // Embed settings
+  // Embed settings with proper typing
   const [embedSettings, setEmbedSettings] = useState({
     allowFullscreen: true,
     autoplay: false,
@@ -96,7 +98,7 @@ export default function Add3DTourScreen() {
       setEmbedUrl(property.embedUrl);
     }
     if (property?.embedSettings) {
-      // Fix TypeScript error by providing default values for optional properties
+      // Handle optional properties properly
       setEmbedSettings({
         allowFullscreen: property.embedSettings.allowFullscreen ?? true,
         autoplay: property.embedSettings.autoplay ?? false,
@@ -120,6 +122,18 @@ export default function Add3DTourScreen() {
     } catch {
       return false;
     }
+  };
+
+  // Helper function to extract URL from iframe
+  const extractUrlFromIframe = (iframeString: string): string => {
+    const srcMatch = iframeString.match(/src=["']([^"']+)["']/);
+    return srcMatch ? srcMatch[1] : iframeString;
+  };
+
+  const handleEmbedUrlChange = (text: string) => {
+    // If user pastes an iframe, extract the src URL
+    const url = text.includes('<iframe') ? extractUrlFromIframe(text) : text;
+    setEmbedUrl(url);
   };
 
   const pickPanoramaImage = async () => {
@@ -337,6 +351,10 @@ export default function Add3DTourScreen() {
           mediaPlaybackRequiresUserAction={!embedSettings.autoplay}
           javaScriptEnabled={true}
           domStorageEnabled={true}
+          mixedContentMode="compatibility"
+          originWhitelist={['*']}
+          allowsInlineMediaPlayback={true}
+          allowsAirPlayForMediaPlayback={true}
         />
       </SafeAreaView>
     );
@@ -406,6 +424,14 @@ export default function Add3DTourScreen() {
             {isOnline ? 'Online' : 'Offline Mode'}
           </Text>
         </View>
+        {pendingUploads.length > 0 && (
+          <View style={styles.pendingIndicator}>
+            <Upload size={14} color={colors.warning} />
+            <Text style={styles.pendingText}>
+              {pendingUploads.length} pending
+            </Text>
+          </View>
+        )}
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
@@ -500,7 +526,7 @@ export default function Add3DTourScreen() {
                     styles.tourTypeDescription,
                     tourType === 'embed' && styles.activeTourTypeDescription
                   ]}>
-                    Use an existing 3D tour from platforms like Matterport, Zillow 3D Home, or others
+                    Use an existing 3D tour from platforms like Matterport, CloudPano, Zillow 3D Home, or others
                   </Text>
                 </TouchableOpacity>
                 
@@ -555,21 +581,23 @@ export default function Add3DTourScreen() {
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Embed URL</Text>
                 <Text style={styles.sectionDescription}>
-                  Paste the embed URL from your 3D tour platform
+                  Paste the embed URL or iframe code from your 3D tour platform
                 </Text>
                 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>3D Tour URL*</Text>
+                  <Text style={styles.label}>3D Tour URL or iframe*</Text>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, styles.textArea]}
                     value={embedUrl}
-                    onChangeText={setEmbedUrl}
-                    placeholder="https://my.matterport.com/show/?m=..."
+                    onChangeText={handleEmbedUrlChange}
+                    placeholder='https://app.cloudpano.com/tours/5yC0O-KbuXC or paste iframe code'
                     autoCapitalize="none"
                     autoCorrect={false}
+                    multiline
+                    numberOfLines={3}
                   />
                   <Text style={styles.helperText}>
-                    Supported platforms: Matterport, Zillow 3D Home, Kuula, Roundme, and others
+                    Supported: Matterport, CloudPano, Zillow 3D Home, Kuula, Roundme, and others. You can paste either the URL or the full iframe code.
                   </Text>
                 </View>
 
