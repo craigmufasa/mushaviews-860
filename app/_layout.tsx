@@ -31,7 +31,7 @@ export default function RootLayout() {
           return;
         }
 
-        console.log('Initializing app...');
+        console.log('Initializing Firebase app...');
         
         // Initialize Firebase auth listener
         const unsubscribeAuth = initializeAuthListener();
@@ -42,7 +42,7 @@ export default function RootLayout() {
         // Check authentication
         await checkAuth();
         
-        console.log('App initialization completed');
+        console.log('Firebase app initialization completed');
         setAppReady(true);
         
         // Cleanup function
@@ -51,7 +51,7 @@ export default function RootLayout() {
           unsubscribeProperties();
         };
       } catch (error) {
-        console.error('Error initializing app:', error);
+        console.error('Error initializing Firebase app:', error);
         // Continue anyway to prevent app from being stuck
         setAppReady(true);
       }

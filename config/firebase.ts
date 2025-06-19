@@ -6,14 +6,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 // Firebase configuration
-// Replace these with your actual Firebase config values
 const firebaseConfig = {
-  apiKey: "your-api-key-here",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "your-app-id"
+  apiKey: "AIzaSyA4JfWvsw3cem_8XThLOXa76WqTNG2BapY",
+  authDomain: "musha-views.firebaseapp.com",
+  projectId: "musha-views",
+  storageBucket: "musha-views.firebasestorage.app",
+  messagingSenderId: "9639081594",
+  appId: "1:9639081594:web:fde69a60cf2ed0d5702dc3",
+  measurementId: "G-RRFG7DKZVM"
 };
 
 // Initialize Firebase
