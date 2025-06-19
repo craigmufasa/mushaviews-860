@@ -87,6 +87,9 @@ export default function PropertyDetailScreen() {
     setTourModalVisible(true);
   };
 
+  // Convert sqm to sqft for display (1 sqm = 10.764 sqft)
+  const sqftValue = property.sqm ? Math.round(property.sqm * 10.764) : 0;
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -125,7 +128,7 @@ export default function PropertyDetailScreen() {
             </View>
             <View style={styles.infoItem}>
               <Square size={20} color={colors.primary} />
-              <Text style={styles.infoText}>{formatNumber(property.sqft)} sqft</Text>
+              <Text style={styles.infoText}>{formatNumber(sqftValue)} sqft</Text>
             </View>
           </View>
           
