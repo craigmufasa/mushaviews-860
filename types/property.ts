@@ -1,6 +1,7 @@
 export type PropertyType = 'house' | 'apartment' | 'condo' | 'townhouse' | 'land' | 'commercial';
 export type PropertyStatus = 'for_sale' | 'for_rent' | 'sold' | 'pending';
 export type DeviceCapability = 'low' | 'medium' | 'high';
+export type TourType = 'panoramic' | 'embed' | 'hybrid';
 
 export interface PropertyFilter {
   priceMin?: number;
@@ -104,6 +105,16 @@ export interface Property {
     optimizeForLowEnd?: boolean;
     imageQuality?: 'low' | 'medium' | 'high';
     supportOfflineViewing?: boolean;
+  };
+  
+  // Embed URL support for 3D tours
+  tourType?: TourType;
+  embedUrl?: string;
+  embedSettings?: {
+    allowFullscreen?: boolean;
+    autoplay?: boolean;
+    showControls?: boolean;
+    responsive?: boolean;
   };
   
   // 3D Model support

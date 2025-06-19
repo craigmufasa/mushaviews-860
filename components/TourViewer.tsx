@@ -12,17 +12,26 @@ import {
   ActivityIndicator,
   Alert
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { Image } from 'expo-image';
-import { X, Maximize2, Minimize2, RotateCw, MapPin, Info, Home, ChevronRight, Eye, Wifi, WifiOff } from 'lucide-react-native';
+import { X, Maximize2, Minimize2, RotateCw, MapPin, Info, Home, ChevronRight, Eye, Wifi, WifiOff, Globe } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
-import { TourRoom } from '@/types/property';
+import { TourRoom, TourType } from '@/types/property';
 
 interface TourViewerProps {
-  rooms: TourRoom[];
+  rooms?: TourRoom[];
+  embedUrl?: string;
+  tourType?: TourType;
   initialRoomId?: string;
   onClose: () => void;
   enableVR?: boolean;
   offlineMode?: boolean;
+  embedSettings?: {
+    allowFullscreen?: boolean;
+    autoplay?: boolean;
+    showControls?: boolean;
+    responsive?: boolean;
+  };
 }
 
 const { width, height } = Dimensions.get('window');
@@ -37,13 +46,21 @@ const detect360Support = (): boolean => {
 };
 
 export const TourViewer: React.FC<TourViewerProps> = ({ 
-  rooms, 
+  rooms = [], 
+  embedUrl,
+  tourType = 'panoramic',
   initialRoomId, 
   onClose,
   enableVR = false,
-  offlineMode = false
+  offlineMode = false,
+  embedSettings = {
+    allowFullscreen: true,
+    autoplay: false,
+    showControls: true,
+    responsive: true,
+  }
 }) => {
-  const [currentRoomId, setCurrentRoomId] = useState(initialRoomId || rooms[0].id);
+  const [currentRoomId, setCurrentRoomId] = useState(initialRoomId || (rooms.length > 0 ? rooms[0].id : ''));
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [panoramaOffset, setPanoramaOffset] = useState(0);
@@ -55,13 +72,16 @@ export const TourViewer: React.FC<TourViewerProps> = ({
   const [imageQuality, setImageQuality] = useState<'low' | 'medium' | 'high'>('medium');
   const [isOnline, setIsOnline] = useState(!offlineMode);
   const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<'embed' | 'panoramic'>(
+    tourType === 'embed' ? 'embed' : 'panoramic'
+  );
   
-  const currentRoom = rooms.find(room => room.id === currentRoomId) || rooms[0];
+  const currentRoom = rooms.find(room => room.id === currentRoomId) || (rooms.length > 0 ? rooms[0] : null);
   
   // Get connected rooms
-  const connectedRooms = rooms.filter(room => 
+  const connectedRooms = currentRoom ? rooms.filter(room => 
     currentRoom.connections.includes(room.id)
-  );
+  ) : [];
 
   // Animation values
   const pan = useRef(new Animated.Value(0)).current;
@@ -76,22 +96,22 @@ export const TourViewer: React.FC<TourViewerProps> = ({
   // Set up pan responder for panorama movement with VR support
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => !isVRMode,
+      onStartShouldSetPanResponder: () => !isVRMode && viewMode === 'panoramic',
       onPanResponderGrant: () => {
-        if (!isVRMode) {
+        if (!isVRMode && viewMode === 'panoramic') {
           pan.setOffset(panoramaOffset);
           pan.setValue(0);
         }
       },
       onPanResponderMove: (_, gestureState) => {
-        if (!isVRMode) {
+        if (!isVRMode && viewMode === 'panoramic') {
           // Enhanced sensitivity for better 360 experience
           const sensitivity = isFullscreen ? 0.8 : 0.5;
           pan.setValue(gestureState.dx * sensitivity);
         }
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (!isVRMode) {
+        if (!isVRMode && viewMode === 'panoramic') {
           pan.flattenOffset();
           const sensitivity = isFullscreen ? 0.8 : 0.5;
           setPanoramaOffset(panoramaOffset + gestureState.dx * sensitivity);
@@ -180,36 +200,38 @@ export const TourViewer: React.FC<TourViewerProps> = ({
       setPreloadedImages(preloaded);
     };
 
-    if (isOnline) {
+    if (isOnline && rooms.length > 0) {
       preloadImages();
     }
   }, [rooms, isOnline]);
 
   // Handle room change with optimizations
   useEffect(() => {
-    setIsLoading(true);
-    
-    // Reset panorama position when changing rooms
-    pan.setValue(0);
-    setPanoramaOffset(0);
-    
-    // Fade transition for better UX
-    Animated.sequence([
-      Animated.timing(imageOpacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true
-      }),
-      Animated.timing(imageOpacity, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true
-      })
-    ]).start();
-    
-    // Clear active hotspot when changing rooms
-    setActiveHotspot(null);
-  }, [currentRoomId]);
+    if (viewMode === 'panoramic') {
+      setIsLoading(true);
+      
+      // Reset panorama position when changing rooms
+      pan.setValue(0);
+      setPanoramaOffset(0);
+      
+      // Fade transition for better UX
+      Animated.sequence([
+        Animated.timing(imageOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true
+        }),
+        Animated.timing(imageOpacity, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true
+        })
+      ]).start();
+      
+      // Clear active hotspot when changing rooms
+      setActiveHotspot(null);
+    }
+  }, [currentRoomId, viewMode]);
 
   // Adaptive image quality based on connection
   const getImageUrl = (baseUrl: string): string => {
@@ -280,6 +302,13 @@ export const TourViewer: React.FC<TourViewerProps> = ({
     }).start();
   };
 
+  const toggleViewMode = () => {
+    if (tourType === 'hybrid') {
+      setViewMode(viewMode === 'embed' ? 'panoramic' : 'embed');
+      setIsLoading(true);
+    }
+  };
+
   // Handle image load with quality adaptation
   const handleImageLoad = () => {
     setIsLoading(false);
@@ -293,6 +322,15 @@ export const TourViewer: React.FC<TourViewerProps> = ({
     } else if (imageQuality === 'medium') {
       setImageQuality('low');
     }
+  };
+
+  const handleWebViewLoad = () => {
+    setIsLoading(false);
+  };
+
+  const handleWebViewError = () => {
+    setIsLoading(false);
+    Alert.alert('Error', 'Failed to load 3D tour. Please check your internet connection.');
   };
 
   // Position hotspots based on room connections with VR adjustments
@@ -330,10 +368,12 @@ export const TourViewer: React.FC<TourViewerProps> = ({
 
   // Get room path (breadcrumb)
   const getRoomPath = () => {
+    if (!currentRoom) return [];
+    
     const path = [currentRoom];
     const mainRoom = rooms.find(room => room.isMain) || rooms[0];
     
-    if (currentRoom.id === mainRoom.id) {
+    if (!mainRoom || currentRoom.id === mainRoom.id) {
       return path;
     }
     
@@ -342,6 +382,40 @@ export const TourViewer: React.FC<TourViewerProps> = ({
     }
     
     return [mainRoom, currentRoom];
+  };
+
+  // Generate embed HTML for WebView
+  const generateEmbedHTML = () => {
+    if (!embedUrl) return '';
+    
+    const responsive = embedSettings.responsive ? 'width="100%" height="100%"' : '';
+    const allowFullscreen = embedSettings.allowFullscreen ? 'allowfullscreen' : '';
+    const autoplay = embedSettings.autoplay ? '&autoplay=1' : '';
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { margin: 0; padding: 0; background: #000; }
+            iframe { border: none; display: block; }
+            .container { width: 100%; height: 100vh; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <iframe 
+              src="${embedUrl}${autoplay}" 
+              ${responsive}
+              ${allowFullscreen}
+              frameborder="0"
+              scrolling="no">
+            </iframe>
+          </div>
+        </body>
+      </html>
+    `;
   };
 
   return (
@@ -366,26 +440,30 @@ export const TourViewer: React.FC<TourViewerProps> = ({
         </TouchableOpacity>
         
         <View style={styles.roomPathContainer}>
-          {getRoomPath().map((room, index, array) => (
-            <React.Fragment key={room.id}>
-              {index > 0 && (
-                <ChevronRight size={16} color="rgba(255, 255, 255, 0.7)" />
-              )}
-              <TouchableOpacity 
-                onPress={() => navigateToRoom(room.id)}
-                disabled={room.id === currentRoomId}
-              >
-                <Text 
-                  style={[
-                    styles.roomPathText,
-                    room.id === currentRoomId && styles.currentRoomPathText
-                  ]}
+          {viewMode === 'embed' ? (
+            <Text style={styles.embedTitle}>3D Tour</Text>
+          ) : (
+            getRoomPath().map((room, index, array) => (
+              <React.Fragment key={room.id}>
+                {index > 0 && (
+                  <ChevronRight size={16} color="rgba(255, 255, 255, 0.7)" />
+                )}
+                <TouchableOpacity 
+                  onPress={() => navigateToRoom(room.id)}
+                  disabled={room.id === currentRoomId}
                 >
-                  {room.name}
-                </Text>
-              </TouchableOpacity>
-            </React.Fragment>
-          ))}
+                  <Text 
+                    style={[
+                      styles.roomPathText,
+                      room.id === currentRoomId && styles.currentRoomPathText
+                    ]}
+                  >
+                    {room.name}
+                  </Text>
+                </TouchableOpacity>
+              </React.Fragment>
+            ))
+          )}
         </View>
         
         <View style={styles.headerButtons}>
@@ -398,17 +476,34 @@ export const TourViewer: React.FC<TourViewerProps> = ({
             )}
           </View>
           
-          {enableVR && supports360 && (
+          {/* View mode toggle for hybrid tours */}
+          {tourType === 'hybrid' && (
+            <TouchableOpacity onPress={toggleViewMode} style={styles.headerButton}>
+              {viewMode === 'embed' ? (
+                <Eye size={20} color="white" />
+              ) : (
+                <Globe size={20} color="white" />
+              )}
+            </TouchableOpacity>
+          )}
+          
+          {enableVR && supports360 && viewMode === 'panoramic' && (
             <TouchableOpacity onPress={toggleVRMode} style={styles.headerButton}>
               <Eye size={20} color={isVRMode ? colors.primary : "white"} />
             </TouchableOpacity>
           )}
-          <TouchableOpacity onPress={toggleInfo} style={styles.headerButton}>
-            <Info size={20} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={toggleFloorPlan} style={styles.headerButton}>
-            <Home size={20} color="white" />
-          </TouchableOpacity>
+          
+          {viewMode === 'panoramic' && (
+            <>
+              <TouchableOpacity onPress={toggleInfo} style={styles.headerButton}>
+                <Info size={20} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={toggleFloorPlan} style={styles.headerButton}>
+                <Home size={20} color="white" />
+              </TouchableOpacity>
+            </>
+          )}
+          
           <TouchableOpacity onPress={toggleFullscreen} style={styles.headerButton}>
             {isFullscreen ? (
               <Minimize2 size={24} color="white" />
@@ -419,230 +514,253 @@ export const TourViewer: React.FC<TourViewerProps> = ({
         </View>
       </Animated.View>
 
-      <View style={styles.panoramaContainer} {...(!isVRMode ? panResponder.panHandlers : {})}>
+      {/* Content Area */}
+      <View style={styles.contentContainer}>
         {isLoading && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.secondary} />
             <Text style={styles.loadingText}>
-              {isVRMode ? 'Preparing VR experience...' : 'Loading panorama...'}
+              {viewMode === 'embed' ? 'Loading 3D tour...' : 
+               isVRMode ? 'Preparing VR experience...' : 'Loading panorama...'}
             </Text>
             {!isOnline && (
               <Text style={styles.offlineText}>Offline mode - using cached content</Text>
             )}
           </View>
         )}
-        
-        <Animated.View 
-          style={[
-            styles.panoramaWrapper,
-            {
-              transform: [
-                { 
-                  translateX: isVRMode ? 
-                    vrTransition.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0, 0]
-                    }) : pan 
-                },
-                {
-                  scale: isVRMode ? 
-                    vrTransition.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [1, 1.2]
-                    }) : 1
-                }
-              ],
-              opacity: imageOpacity
-            }
-          ]}
-        >
-          <Image
-            source={{ uri: getImageUrl(currentRoom.panoramaImage) }}
-            style={[
-              styles.panoramaImage,
-              isVRMode && styles.vrPanoramaImage
-            ]}
-            contentFit="cover"
-            onLoad={handleImageLoad}
-            onError={handleImageError}
+
+        {/* Embed View */}
+        {viewMode === 'embed' && embedUrl && (
+          <WebView
+            source={{ html: generateEmbedHTML() }}
+            style={styles.webView}
+            onLoad={handleWebViewLoad}
+            onError={handleWebViewError}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            startInLoadingState={true}
+            scalesPageToFit={true}
+            bounces={false}
+            scrollEnabled={false}
           />
-          
-          {/* VR overlay effects */}
-          {isVRMode && (
+        )}
+
+        {/* Panoramic View */}
+        {viewMode === 'panoramic' && currentRoom && (
+          <View style={styles.panoramaContainer} {...(!isVRMode ? panResponder.panHandlers : {})}>
             <Animated.View 
               style={[
-                styles.vrOverlay,
+                styles.panoramaWrapper,
                 {
-                  opacity: vrTransition
+                  transform: [
+                    { 
+                      translateX: isVRMode ? 
+                        vrTransition.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 0]
+                        }) : pan 
+                    },
+                    {
+                      scale: isVRMode ? 
+                        vrTransition.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [1, 1.2]
+                        }) : 1
+                    }
+                  ],
+                  opacity: imageOpacity
                 }
               ]}
-            />
-          )}
-        </Animated.View>
-        
-        {/* Room navigation hotspots */}
-        {connectedRooms.map((room, index) => (
-          <Animated.View
-            key={room.id}
-            style={[
-              styles.hotspot, 
-              getHotspotPosition(index, connectedRooms.length),
-              isVRMode && {
-                transform: [{
-                  scale: vrTransition.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [1, 1.5]
-                  })
-                }]
-              }
-            ]}
-          >
-            <TouchableOpacity
-              onPress={() => handleHotspotClick(room.id)}
-              style={styles.hotspotTouchable}
             >
-              <View style={[styles.hotspotInner, isVRMode && styles.vrHotspotInner]}>
-                <Text style={[styles.hotspotText, isVRMode && styles.vrHotspotText]}>
-                  {room.name}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </Animated.View>
-        ))}
-        
-        {/* Active hotspot info */}
-        {activeHotspot && !isVRMode && (
-          <View style={styles.hotspotInfoContainer}>
-            <Text style={styles.hotspotInfoTitle}>{activeHotspot.name}</Text>
-            <TouchableOpacity 
-              style={styles.goToRoomButton}
-              onPress={() => navigateToRoom(activeHotspot.roomId)}
-            >
-              <Text style={styles.goToRoomButtonText}>Go to this room</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        
-        {/* Floor plan overlay */}
-        {showFloorPlan && !isVRMode && (
-          <Animated.View 
-            style={[
-              styles.floorPlanContainer,
-              {
-                opacity: floorPlanAnimation,
-                transform: [{ 
-                  translateY: floorPlanAnimation.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [50, 0]
-                  })
-                }]
-              }
-            ]}
-          >
-            <View style={styles.floorPlanHeader}>
-              <Text style={styles.floorPlanTitle}>Floor Plan</Text>
-              <TouchableOpacity onPress={toggleFloorPlan}>
-                <X size={20} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.floorPlanContent}>
-              <View style={styles.floorPlanPlaceholder}>
-                <View style={styles.floorPlanGrid}>
-                  {rooms.map((room) => (
-                    <TouchableOpacity
-                      key={room.id}
-                      style={[
-                        styles.floorPlanRoom,
-                        currentRoomId === room.id && styles.floorPlanRoomActive
-                      ]}
-                      onPress={() => navigateToRoom(room.id)}
-                    >
-                      <Text 
-                        style={[
-                          styles.floorPlanRoomText,
-                          currentRoomId === room.id && styles.floorPlanRoomTextActive
-                        ]}
-                      >
-                        {room.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <Text style={styles.floorPlanNote}>
-                  Interactive floor plan • Tap rooms to navigate
-                </Text>
-              </View>
-            </View>
-          </Animated.View>
-        )}
-        
-        {/* Room info panel */}
-        {showInfo && !isVRMode && (
-          <Animated.View 
-            style={[
-              styles.infoPanel,
-              {
-                opacity: infoAnimation,
-                transform: [{ 
-                  translateY: infoAnimation.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [50, 0]
-                  })
-                }]
-              }
-            ]}
-          >
-            <View style={styles.infoPanelHeader}>
-              <Text style={styles.infoPanelTitle}>Room Information</Text>
-              <TouchableOpacity onPress={toggleInfo}>
-                <X size={20} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.infoPanelContent}>
-              <Text style={styles.infoPanelRoomName}>{currentRoom.name}</Text>
+              <Image
+                source={{ uri: getImageUrl(currentRoom.panoramaImage) }}
+                style={[
+                  styles.panoramaImage,
+                  isVRMode && styles.vrPanoramaImage
+                ]}
+                contentFit="cover"
+                onLoad={handleImageLoad}
+                onError={handleImageError}
+              />
               
-              {currentRoom.description && (
-                <Text style={styles.infoPanelDescription}>
-                  {currentRoom.description}
-                </Text>
+              {/* VR overlay effects */}
+              {isVRMode && (
+                <Animated.View 
+                  style={[
+                    styles.vrOverlay,
+                    {
+                      opacity: vrTransition
+                    }
+                  ]}
+                />
               )}
-              
-              <View style={styles.infoPanelConnections}>
-                <Text style={styles.infoPanelConnectionsTitle}>
-                  Connected Rooms:
-                </Text>
-                {connectedRooms.map((room) => (
-                  <TouchableOpacity
-                    key={room.id}
-                    style={styles.infoPanelConnectionItem}
-                    onPress={() => navigateToRoom(room.id)}
-                  >
-                    <MapPin size={16} color={colors.secondary} />
-                    <Text style={styles.infoPanelConnectionText}>
+            </Animated.View>
+            
+            {/* Room navigation hotspots */}
+            {connectedRooms.map((room, index) => (
+              <Animated.View
+                key={room.id}
+                style={[
+                  styles.hotspot, 
+                  getHotspotPosition(index, connectedRooms.length),
+                  isVRMode && {
+                    transform: [{
+                      scale: vrTransition.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 1.5]
+                      })
+                    }]
+                  }
+                ]}
+              >
+                <TouchableOpacity
+                  onPress={() => handleHotspotClick(room.id)}
+                  style={styles.hotspotTouchable}
+                >
+                  <View style={[styles.hotspotInner, isVRMode && styles.vrHotspotInner]}>
+                    <Text style={[styles.hotspotText, isVRMode && styles.vrHotspotText]}>
                       {room.name}
                     </Text>
+                  </View>
+                </TouchableOpacity>
+              </Animated.View>
+            ))}
+            
+            {/* Active hotspot info */}
+            {activeHotspot && !isVRMode && (
+              <View style={styles.hotspotInfoContainer}>
+                <Text style={styles.hotspotInfoTitle}>{activeHotspot.name}</Text>
+                <TouchableOpacity 
+                  style={styles.goToRoomButton}
+                  onPress={() => navigateToRoom(activeHotspot.roomId)}
+                >
+                  <Text style={styles.goToRoomButtonText}>Go to this room</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            
+            {/* Floor plan overlay */}
+            {showFloorPlan && !isVRMode && (
+              <Animated.View 
+                style={[
+                  styles.floorPlanContainer,
+                  {
+                    opacity: floorPlanAnimation,
+                    transform: [{ 
+                      translateY: floorPlanAnimation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [50, 0]
+                      })
+                    }]
+                  }
+                ]}
+              >
+                <View style={styles.floorPlanHeader}>
+                  <Text style={styles.floorPlanTitle}>Floor Plan</Text>
+                  <TouchableOpacity onPress={toggleFloorPlan}>
+                    <X size={20} color={colors.text} />
                   </TouchableOpacity>
-                ))}
-              </View>
-              
-              {/* Quality and performance info */}
-              <View style={styles.performanceInfo}>
-                <Text style={styles.performanceTitle}>Performance:</Text>
-                <Text style={styles.performanceText}>
-                  Quality: {imageQuality.toUpperCase()} • 
-                  {isOnline ? ' Online' : ' Offline'} • 
-                  {preloadedImages.size}/{rooms.length} cached
-                </Text>
-              </View>
-            </View>
-          </Animated.View>
+                </View>
+                
+                <View style={styles.floorPlanContent}>
+                  <View style={styles.floorPlanPlaceholder}>
+                    <View style={styles.floorPlanGrid}>
+                      {rooms.map((room) => (
+                        <TouchableOpacity
+                          key={room.id}
+                          style={[
+                            styles.floorPlanRoom,
+                            currentRoomId === room.id && styles.floorPlanRoomActive
+                          ]}
+                          onPress={() => navigateToRoom(room.id)}
+                        >
+                          <Text 
+                            style={[
+                              styles.floorPlanRoomText,
+                              currentRoomId === room.id && styles.floorPlanRoomTextActive
+                            ]}
+                          >
+                            {room.name}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <Text style={styles.floorPlanNote}>
+                      Interactive floor plan • Tap rooms to navigate
+                    </Text>
+                  </View>
+                </View>
+              </Animated.View>
+            )}
+            
+            {/* Room info panel */}
+            {showInfo && !isVRMode && (
+              <Animated.View 
+                style={[
+                  styles.infoPanel,
+                  {
+                    opacity: infoAnimation,
+                    transform: [{ 
+                      translateY: infoAnimation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [50, 0]
+                      })
+                    }]
+                  }
+                ]}
+              >
+                <View style={styles.infoPanelHeader}>
+                  <Text style={styles.infoPanelTitle}>Room Information</Text>
+                  <TouchableOpacity onPress={toggleInfo}>
+                    <X size={20} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+                
+                <View style={styles.infoPanelContent}>
+                  <Text style={styles.infoPanelRoomName}>{currentRoom.name}</Text>
+                  
+                  {currentRoom.description && (
+                    <Text style={styles.infoPanelDescription}>
+                      {currentRoom.description}
+                    </Text>
+                  )}
+                  
+                  <View style={styles.infoPanelConnections}>
+                    <Text style={styles.infoPanelConnectionsTitle}>
+                      Connected Rooms:
+                    </Text>
+                    {connectedRooms.map((room) => (
+                      <TouchableOpacity
+                        key={room.id}
+                        style={styles.infoPanelConnectionItem}
+                        onPress={() => navigateToRoom(room.id)}
+                      >
+                        <MapPin size={16} color={colors.secondary} />
+                        <Text style={styles.infoPanelConnectionText}>
+                          {room.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  
+                  {/* Quality and performance info */}
+                  <View style={styles.performanceInfo}>
+                    <Text style={styles.performanceTitle}>Performance:</Text>
+                    <Text style={styles.performanceText}>
+                      Quality: {imageQuality.toUpperCase()} • 
+                      {isOnline ? ' Online' : ' Offline'} • 
+                      {preloadedImages.size}/{rooms.length} cached
+                    </Text>
+                  </View>
+                </View>
+              </Animated.View>
+            )}
+          </View>
         )}
       </View>
 
-      {/* Room selector - hidden in VR mode */}
-      {!isVRMode && (
+      {/* Room selector - hidden in VR mode and embed mode */}
+      {viewMode === 'panoramic' && !isVRMode && rooms.length > 0 && (
         <Animated.View 
           style={[
             styles.roomSelector,
@@ -682,7 +800,7 @@ export const TourViewer: React.FC<TourViewerProps> = ({
       )}
 
       {/* Instructions - adaptive based on mode */}
-      {!isVRMode && (
+      {viewMode === 'panoramic' && !isVRMode && (
         <Animated.View 
           style={[
             styles.instructions,
@@ -757,6 +875,11 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
   },
+  embedTitle: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   headerButtons: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -768,6 +891,14 @@ const styles = StyleSheet.create({
   headerButton: {
     padding: 8,
     marginLeft: 4,
+  },
+  contentContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  webView: {
+    flex: 1,
+    backgroundColor: '#000',
   },
   panoramaContainer: {
     flex: 1,

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Box, Eye, Home, ArrowLeft, Info } from 'lucide-react-native';
+import { Box, Eye, Home, ArrowLeft, Info, Globe, Camera } from 'lucide-react-native';
 import { TourViewer } from '@/components/TourViewer';
 import { ModelViewer } from '@/components/ModelViewer';
 import { usePropertyStore } from '@/store/property-store';
@@ -67,7 +67,10 @@ export default function TourScreen() {
     );
   }
 
-  const has3DTour = property.has3DTour && property.tourRooms && property.tourRooms.length > 0;
+  const has3DTour = property.has3DTour && (
+    (property.tourRooms && property.tourRooms.length > 0) || 
+    property.embedUrl
+  );
   const has3DModel = property.has3DModel && property.models3D && property.models3D.length > 0;
 
   if (!has3DTour && !has3DModel) {
@@ -97,7 +100,23 @@ export default function TourScreen() {
     }
   };
 
+  const getTourTypeIcon = () => {
+    if (property.tourType === 'embed') return Globe;
+    if (property.tourType === 'panoramic') return Camera;
+    if (property.tourType === 'hybrid') return Eye;
+    return Eye;
+  };
+
+  const getTourTypeDescription = () => {
+    if (property.tourType === 'embed') return 'Professional 3D tour from external platform';
+    if (property.tourType === 'panoramic') return 'Custom panoramic room-by-room tour';
+    if (property.tourType === 'hybrid') return 'Combined embed and panoramic experience';
+    return 'Interactive 3D tour experience';
+  };
+
   if (viewMode === 'overview') {
+    const TourIcon = getTourTypeIcon();
+    
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <Stack.Screen options={{ headerShown: false }} />
@@ -121,7 +140,7 @@ export default function TourScreen() {
           <View style={styles.propertyInfo}>
             <Text style={styles.propertyAddress}>{property.address}</Text>
             <Text style={styles.propertyDetails}>
-              {property.beds} bd • {property.baths} ba • {property.sqft.toLocaleString()} sqft
+              {property.beds} bd • {property.baths} ba • {property.sqm.toLocaleString()} sqm
             </Text>
             <Text style={styles.propertyPrice}>${property.price.toLocaleString()}</Text>
           </View>
@@ -136,22 +155,31 @@ export default function TourScreen() {
               >
                 <View style={styles.experienceImageContainer}>
                   <Image 
-                    source={{ uri: property.tourRooms?.[0]?.panoramaImage || property.images[0] }}
+                    source={{ 
+                      uri: property.tourRooms?.[0]?.panoramaImage || property.images[0] 
+                    }}
                     style={styles.experienceImage}
                   />
                   <View style={styles.experienceBadge}>
-                    <Home size={16} color="white" />
-                    <Text style={styles.experienceBadgeText}>3D Tour</Text>
+                    <TourIcon size={16} color="white" />
+                    <Text style={styles.experienceBadgeText}>
+                      {property.tourType === 'embed' ? 'Embed Tour' :
+                       property.tourType === 'panoramic' ? 'Panoramic Tour' :
+                       property.tourType === 'hybrid' ? 'Hybrid Tour' : '3D Tour'}
+                    </Text>
                   </View>
                 </View>
                 <View style={styles.experienceInfo}>
                   <Text style={styles.experienceTitle}>Interactive 3D Tour</Text>
                   <Text style={styles.experienceDescription}>
-                    Explore this property room by room with our immersive 3D tour
+                    {getTourTypeDescription()}
                   </Text>
                   <View style={styles.experienceStats}>
                     <Text style={styles.experienceStatsText}>
-                      {property.tourRooms?.length || 0} rooms available
+                      {property.tourType === 'embed' && property.embedUrl && 'Professional embed tour'}
+                      {property.tourType === 'panoramic' && `${property.tourRooms?.length || 0} rooms available`}
+                      {property.tourType === 'hybrid' && 
+                        `${property.embedUrl ? 'Embed + ' : ''}${property.tourRooms?.length || 0} panoramic rooms`}
                     </Text>
                   </View>
                   <TouchableOpacity 
@@ -209,8 +237,10 @@ export default function TourScreen() {
             </View>
             <Text style={styles.infoText}>
               Our 3D experiences provide an immersive way to explore properties remotely. 
-              The 3D tour lets you navigate between rooms as if you were there, while 3D models 
-              allow you to examine specific features in detail.
+              {property.tourType === 'embed' && ' This property features a professional 3D tour from an external platform.'}
+              {property.tourType === 'panoramic' && ' Navigate between rooms using our custom panoramic tour system.'}
+              {property.tourType === 'hybrid' && ' This property combines both professional embed tours and custom panoramic rooms.'}
+              {has3DModel && ' Interactive 3D models allow you to examine specific features in detail.'}
             </Text>
           </View>
         </ScrollView>
@@ -261,9 +291,13 @@ export default function TourScreen() {
         </View>
       )}
       
-      {viewMode === 'tour' && has3DTour && property.tourRooms && (
+      {viewMode === 'tour' && has3DTour && (
         <TourViewer 
-          rooms={property.tourRooms} 
+          rooms={property.tourRooms}
+          embedUrl={property.embedUrl}
+          tourType={property.tourType}
+          embedSettings={property.embedSettings}
+          enableVR={property.tourSettings?.enableVRMode}
           onClose={() => setViewMode('overview')}
         />
       )}

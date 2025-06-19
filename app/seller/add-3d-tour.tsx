@@ -14,11 +14,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { Box, Plus, X, Camera, Link, Wifi, WifiOff, Upload, AlertCircle, Eye, Maximize2 } from 'lucide-react-native';
+import { Box, Plus, X, Camera, Link, Wifi, WifiOff, Upload, AlertCircle, Eye, Maximize2, Globe } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
 import { useAuthStore } from '@/store/auth-store';
 import { usePropertyStore } from '@/store/property-store';
-import { Property, TourRoom, DeviceCapability } from '@/types/property';
+import { Property, TourRoom, DeviceCapability, TourType } from '@/types/property';
 
 export default function Add3DTourScreen() {
   const router = useRouter();
@@ -33,6 +33,8 @@ export default function Add3DTourScreen() {
   
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [propertyId, setPropertyId] = useState('');
+  const [tourType, setTourType] = useState<TourType>('panoramic');
+  const [embedUrl, setEmbedUrl] = useState('');
   const [rooms, setRooms] = useState<TourRoom[]>([]);
   const [currentRoom, setCurrentRoom] = useState<Partial<TourRoom>>({
     name: '',
@@ -45,6 +47,14 @@ export default function Add3DTourScreen() {
   const [enableVRMode, setEnableVRMode] = useState(true);
   const [optimizeForLowEnd, setOptimizeForLowEnd] = useState(false);
   const [showPanoramaCapture, setShowPanoramaCapture] = useState(false);
+  
+  // Embed settings
+  const [embedSettings, setEmbedSettings] = useState({
+    allowFullscreen: true,
+    autoplay: false,
+    showControls: true,
+    responsive: true,
+  });
 
   // Network status
   const [isOnline, setIsOnline] = useState(true);
@@ -78,11 +88,31 @@ export default function Add3DTourScreen() {
     setSelectedProperty(property || null);
     setPropertyId(id);
     
-    // If property already has tour rooms, load them
+    // If property already has tour data, load it
+    if (property?.tourType) {
+      setTourType(property.tourType);
+    }
+    if (property?.embedUrl) {
+      setEmbedUrl(property.embedUrl);
+    }
+    if (property?.embedSettings) {
+      setEmbedSettings(property.embedSettings);
+    }
     if (property?.tourRooms) {
       setRooms(property.tourRooms);
     } else {
       setRooms([]);
+    }
+  };
+
+  const validateEmbedUrl = (url: string): boolean => {
+    if (!url.trim()) return false;
+    
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
     }
   };
 
@@ -200,9 +230,21 @@ export default function Add3DTourScreen() {
       return;
     }
 
-    if (rooms.length === 0) {
-      Alert.alert('Error', 'Please add at least one room for the 3D tour');
-      return;
+    if (tourType === 'embed') {
+      if (!validateEmbedUrl(embedUrl)) {
+        Alert.alert('Error', 'Please provide a valid embed URL');
+        return;
+      }
+    } else if (tourType === 'panoramic') {
+      if (rooms.length === 0) {
+        Alert.alert('Error', 'Please add at least one room for the panoramic tour');
+        return;
+      }
+    } else if (tourType === 'hybrid') {
+      if (!validateEmbedUrl(embedUrl) && rooms.length === 0) {
+        Alert.alert('Error', 'Please provide either an embed URL or add rooms for the hybrid tour');
+        return;
+      }
     }
 
     // Show offline warning if applicable
@@ -222,16 +264,27 @@ export default function Add3DTourScreen() {
 
   const performSubmit = async () => {
     try {
-      await updateProperty(selectedProperty!.id, {
+      const updateData: Partial<Property> = {
         has3DTour: true,
-        tourRooms: rooms,
+        tourType,
         tourSettings: {
           enableVRMode,
           optimizeForLowEnd: optimizeForLowEnd,
           imageQuality,
           supportOfflineViewing: true,
         },
-      });
+      };
+
+      if (tourType === 'embed' || tourType === 'hybrid') {
+        updateData.embedUrl = embedUrl;
+        updateData.embedSettings = embedSettings;
+      }
+
+      if (tourType === 'panoramic' || tourType === 'hybrid') {
+        updateData.tourRooms = rooms;
+      }
+
+      await updateProperty(selectedProperty!.id, updateData);
 
       const successMessage = isOfflineMode || !isOnline 
         ? '3D tour saved offline successfully. It will be uploaded when you come back online.'
@@ -385,141 +438,286 @@ export default function Add3DTourScreen() {
 
         {selectedProperty && (
           <>
-            {/* Tour Settings */}
+            {/* Tour Type Selection */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Tour Settings</Text>
+              <Text style={styles.sectionTitle}>Tour Type</Text>
+              <Text style={styles.sectionDescription}>
+                Choose how you want to create your 3D tour
+              </Text>
               
-              <View style={styles.settingsGrid}>
-                <View style={styles.settingItem}>
-                  <Text style={styles.settingLabel}>Image Quality:</Text>
-                  <View style={styles.qualityButtons}>
-                    {(['low', 'medium', 'high'] as const).map((quality) => (
-                      <TouchableOpacity
-                        key={quality}
-                        style={[
-                          styles.qualityButton,
-                          imageQuality === quality && styles.activeQualityButton
-                        ]}
-                        onPress={() => setImageQuality(quality)}
-                      >
-                        <Text style={[
-                          styles.qualityButtonText,
-                          imageQuality === quality && styles.activeQualityButtonText
-                        ]}>
-                          {quality.charAt(0).toUpperCase() + quality.slice(1)}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+              <View style={styles.tourTypeContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.tourTypeOption,
+                    tourType === 'embed' && styles.activeTourTypeOption
+                  ]}
+                  onPress={() => setTourType('embed')}
+                >
+                  <Globe size={24} color={tourType === 'embed' ? 'white' : colors.primary} />
+                  <Text style={[
+                    styles.tourTypeTitle,
+                    tourType === 'embed' && styles.activeTourTypeTitle
+                  ]}>
+                    Embed URL
+                  </Text>
+                  <Text style={[
+                    styles.tourTypeDescription,
+                    tourType === 'embed' && styles.activeTourTypeDescription
+                  ]}>
+                    Use an existing 3D tour from platforms like Matterport, Zillow 3D Home, or others
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.tourTypeOption,
+                    tourType === 'panoramic' && styles.activeTourTypeOption
+                  ]}
+                  onPress={() => setTourType('panoramic')}
+                >
+                  <Camera size={24} color={tourType === 'panoramic' ? 'white' : colors.secondary} />
+                  <Text style={[
+                    styles.tourTypeTitle,
+                    tourType === 'panoramic' && styles.activeTourTypeTitle
+                  ]}>
+                    Panoramic Tour
+                  </Text>
+                  <Text style={[
+                    styles.tourTypeDescription,
+                    tourType === 'panoramic' && styles.activeTourTypeDescription
+                  ]}>
+                    Create a custom tour using 360° panoramic images
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.tourTypeOption,
+                    tourType === 'hybrid' && styles.activeTourTypeOption
+                  ]}
+                  onPress={() => setTourType('hybrid')}
+                >
+                  <Box size={24} color={tourType === 'hybrid' ? 'white' : colors.text} />
+                  <Text style={[
+                    styles.tourTypeTitle,
+                    tourType === 'hybrid' && styles.activeTourTypeTitle
+                  ]}>
+                    Hybrid Tour
+                  </Text>
+                  <Text style={[
+                    styles.tourTypeDescription,
+                    tourType === 'hybrid' && styles.activeTourTypeDescription
+                  ]}>
+                    Combine both embed URL and panoramic images
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Embed URL Section */}
+            {(tourType === 'embed' || tourType === 'hybrid') && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Embed URL</Text>
+                <Text style={styles.sectionDescription}>
+                  Paste the embed URL from your 3D tour platform
+                </Text>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>3D Tour URL*</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={embedUrl}
+                    onChangeText={setEmbedUrl}
+                    placeholder="https://my.matterport.com/show/?m=..."
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <Text style={styles.helperText}>
+                    Supported platforms: Matterport, Zillow 3D Home, Kuula, Roundme, and others
+                  </Text>
+                </View>
+                
+                <View style={styles.embedSettingsContainer}>
+                  <Text style={styles.settingLabel}>Embed Settings:</Text>
+                  
+                  <View style={styles.settingsGrid}>
+                    <TouchableOpacity 
+                      style={styles.toggleSetting}
+                      onPress={() => setEmbedSettings({
+                        ...embedSettings,
+                        allowFullscreen: !embedSettings.allowFullscreen
+                      })}
+                    >
+                      <Maximize2 size={20} color={embedSettings.allowFullscreen ? colors.primary : colors.textLight} />
+                      <Text style={[
+                        styles.toggleText,
+                        embedSettings.allowFullscreen && styles.activeToggleText
+                      ]}>
+                        Allow Fullscreen
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={styles.toggleSetting}
+                      onPress={() => setEmbedSettings({
+                        ...embedSettings,
+                        showControls: !embedSettings.showControls
+                      })}
+                    >
+                      <Eye size={20} color={embedSettings.showControls ? colors.primary : colors.textLight} />
+                      <Text style={[
+                        styles.toggleText,
+                        embedSettings.showControls && styles.activeToggleText
+                      ]}>
+                        Show Controls
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Tour Settings */}
+            {(tourType === 'panoramic' || tourType === 'hybrid') && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Tour Settings</Text>
+                
+                <View style={styles.settingsGrid}>
+                  <View style={styles.settingItem}>
+                    <Text style={styles.settingLabel}>Image Quality:</Text>
+                    <View style={styles.qualityButtons}>
+                      {(['low', 'medium', 'high'] as const).map((quality) => (
+                        <TouchableOpacity
+                          key={quality}
+                          style={[
+                            styles.qualityButton,
+                            imageQuality === quality && styles.activeQualityButton
+                          ]}
+                          onPress={() => setImageQuality(quality)}
+                        >
+                          <Text style={[
+                            styles.qualityButtonText,
+                            imageQuality === quality && styles.activeQualityButtonText
+                          ]}>
+                            {quality.charAt(0).toUpperCase() + quality.slice(1)}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                  
+                  <View style={styles.settingItem}>
+                    <TouchableOpacity 
+                      style={styles.toggleSetting}
+                      onPress={() => setEnableVRMode(!enableVRMode)}
+                    >
+                      <Eye size={20} color={enableVRMode ? colors.primary : colors.textLight} />
+                      <Text style={[
+                        styles.toggleText,
+                        enableVRMode && styles.activeToggleText
+                      ]}>
+                        Enable VR Mode
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <View style={styles.settingItem}>
+                    <TouchableOpacity 
+                      style={styles.toggleSetting}
+                      onPress={() => setOptimizeForLowEnd(!optimizeForLowEnd)}
+                    >
+                      <Box size={20} color={optimizeForLowEnd ? colors.primary : colors.textLight} />
+                      <Text style={[
+                        styles.toggleText,
+                        optimizeForLowEnd && styles.activeToggleText
+                      ]}>
+                        Optimize for Low-End Devices
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
                 
-                <View style={styles.settingItem}>
-                  <TouchableOpacity 
-                    style={styles.toggleSetting}
-                    onPress={() => setEnableVRMode(!enableVRMode)}
+                <Text style={styles.settingsNote}>
+                  {optimizeForLowEnd 
+                    ? 'Tour will be optimized for devices with limited processing power and slower connections'
+                    : 'Tour will prioritize visual quality and features'
+                  }
+                </Text>
+              </View>
+            )}
+
+            {/* Panoramic Rooms Section */}
+            {(tourType === 'panoramic' || tourType === 'hybrid') && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Tour Rooms</Text>
+                  <TouchableOpacity
+                    style={styles.addRoomButton}
+                    onPress={() => setShowRoomForm(true)}
                   >
-                    <Eye size={20} color={enableVRMode ? colors.primary : colors.textLight} />
-                    <Text style={[
-                      styles.toggleText,
-                      enableVRMode && styles.activeToggleText
-                    ]}>
-                      Enable VR Mode
-                    </Text>
+                    <Plus size={20} color={colors.primary} />
+                    <Text style={styles.addRoomButtonText}>Add Room</Text>
                   </TouchableOpacity>
                 </View>
-                
-                <View style={styles.settingItem}>
-                  <TouchableOpacity 
-                    style={styles.toggleSetting}
-                    onPress={() => setOptimizeForLowEnd(!optimizeForLowEnd)}
-                  >
-                    <Box size={20} color={optimizeForLowEnd ? colors.primary : colors.textLight} />
-                    <Text style={[
-                      styles.toggleText,
-                      optimizeForLowEnd && styles.activeToggleText
-                    ]}>
-                      Optimize for Low-End Devices
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-              
-              <Text style={styles.settingsNote}>
-                {optimizeForLowEnd 
-                  ? 'Tour will be optimized for devices with limited processing power and slower connections'
-                  : 'Tour will prioritize visual quality and features'
-                }
-              </Text>
-            </View>
 
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Tour Rooms</Text>
-                <TouchableOpacity
-                  style={styles.addRoomButton}
-                  onPress={() => setShowRoomForm(true)}
-                >
-                  <Plus size={20} color={colors.primary} />
-                  <Text style={styles.addRoomButtonText}>Add Room</Text>
-                </TouchableOpacity>
-              </View>
-
-              {rooms.length > 0 ? (
-                <View style={styles.roomsList}>
-                  {rooms.map((room) => (
-                    <View key={room.id} style={styles.roomItem}>
-                      <Image
-                        source={{ uri: room.panoramaImage }}
-                        style={styles.roomThumbnail}
-                      />
-                      <View style={styles.roomInfo}>
-                        <View style={styles.roomHeader}>
-                          <Text style={styles.roomName}>{room.name}</Text>
-                          {room.isMain && (
-                            <View style={styles.mainRoomBadge}>
-                              <Text style={styles.mainRoomBadgeText}>MAIN</Text>
-                            </View>
+                {rooms.length > 0 ? (
+                  <View style={styles.roomsList}>
+                    {rooms.map((room) => (
+                      <View key={room.id} style={styles.roomItem}>
+                        <Image
+                          source={{ uri: room.panoramaImage }}
+                          style={styles.roomThumbnail}
+                        />
+                        <View style={styles.roomInfo}>
+                          <View style={styles.roomHeader}>
+                            <Text style={styles.roomName}>{room.name}</Text>
+                            {room.isMain && (
+                              <View style={styles.mainRoomBadge}>
+                                <Text style={styles.mainRoomBadgeText}>MAIN</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={styles.roomConnections}>
+                            Connected to: {room.connections.length} rooms
+                          </Text>
+                          {room.description && (
+                            <Text style={styles.roomDescription} numberOfLines={2}>
+                              {room.description}
+                            </Text>
                           )}
                         </View>
-                        <Text style={styles.roomConnections}>
-                          Connected to: {room.connections.length} rooms
-                        </Text>
-                        {room.description && (
-                          <Text style={styles.roomDescription} numberOfLines={2}>
-                            {room.description}
-                          </Text>
-                        )}
-                      </View>
-                      <View style={styles.roomActions}>
-                        {!room.isMain && (
+                        <View style={styles.roomActions}>
+                          {!room.isMain && (
+                            <TouchableOpacity
+                              style={styles.setMainButton}
+                              onPress={() => setMainRoom(room.id)}
+                            >
+                              <Text style={styles.setMainButtonText}>Set Main</Text>
+                            </TouchableOpacity>
+                          )}
                           <TouchableOpacity
-                            style={styles.setMainButton}
-                            onPress={() => setMainRoom(room.id)}
+                            style={styles.removeRoomButton}
+                            onPress={() => removeRoom(room.id)}
                           >
-                            <Text style={styles.setMainButtonText}>Set Main</Text>
+                            <X size={20} color={colors.error} />
                           </TouchableOpacity>
-                        )}
-                        <TouchableOpacity
-                          style={styles.removeRoomButton}
-                          onPress={() => removeRoom(room.id)}
-                        >
-                          <X size={20} color={colors.error} />
-                        </TouchableOpacity>
+                        </View>
                       </View>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <View style={styles.emptyRoomsContainer}>
-                  <Box size={40} color={colors.textLight} />
-                  <Text style={styles.emptyRoomsText}>
-                    No rooms added yet. Add rooms to create a 3D tour.
-                  </Text>
-                </View>
-              )}
-            </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.emptyRoomsContainer}>
+                    <Box size={40} color={colors.textLight} />
+                    <Text style={styles.emptyRoomsText}>
+                      No rooms added yet. Add rooms to create a panoramic tour.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
 
-            {showRoomForm && (
+            {/* Room Form */}
+            {showRoomForm && (tourType === 'panoramic' || tourType === 'hybrid') && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Add New Room</Text>
 
@@ -837,6 +1035,70 @@ const styles = StyleSheet.create({
     color: colors.textLight,
     marginBottom: 16,
   },
+  tourTypeContainer: {
+    gap: 12,
+  },
+  tourTypeOption: {
+    backgroundColor: colors.background,
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  activeTourTypeOption: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  tourTypeTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  activeTourTypeTitle: {
+    color: 'white',
+  },
+  tourTypeDescription: {
+    fontSize: 14,
+    color: colors.textLight,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  activeTourTypeDescription: {
+    color: 'rgba(255, 255, 255, 0.9)',
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: colors.text,
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  helperText: {
+    fontSize: 12,
+    color: colors.textLight,
+    marginTop: 4,
+  },
+  embedSettingsContainer: {
+    marginTop: 16,
+  },
   settingsGrid: {
     gap: 16,
   },
@@ -1059,33 +1321,6 @@ const styles = StyleSheet.create({
     color: colors.textLight,
     textAlign: 'center',
     marginTop: 12,
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: colors.text,
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  helperText: {
-    fontSize: 12,
-    color: colors.textLight,
-    marginTop: 4,
   },
   panoramaContainer: {
     marginBottom: 12,
