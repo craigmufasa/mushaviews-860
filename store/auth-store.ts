@@ -28,6 +28,7 @@ interface AuthState {
   error: string | null;
   isGuest: boolean;
   hasSelectedRole: boolean;
+  isInitialized: boolean;
   
   // Actions
   setUser: (user: User | null) => void;
@@ -43,6 +44,7 @@ interface AuthState {
   setHasSelectedRole: (value: boolean) => void;
   clearError: () => void;
   initializeAuthListener: () => () => void;
+  setInitialized: (value: boolean) => void;
 }
 
 // Helper to convert Firebase user to our User type
@@ -98,6 +100,7 @@ export const useAuthStore = create<AuthState>()(
       error: null,
       isGuest: false,
       hasSelectedRole: false,
+      isInitialized: false,
       
       setUser: (user: User | null) => {
         set({ 
@@ -107,11 +110,20 @@ export const useAuthStore = create<AuthState>()(
         });
       },
       
+      setInitialized: (value: boolean) => {
+        set({ isInitialized: value });
+      },
+      
       login: async (email: string, password: string) => {
+        if (!auth) {
+          set({ error: 'Firebase not initialized' });
+          return false;
+        }
+        
         set({ isLoading: true, error: null });
         
         try {
-          const userCredential = await signInWithEmailAndPassword(auth as Auth, email, password);
+          const userCredential = await signInWithEmailAndPassword(auth, email, password);
           const firebaseUser = userCredential.user;
           
           const userData = await convertFirebaseUser(firebaseUser);
@@ -160,10 +172,15 @@ export const useAuthStore = create<AuthState>()(
       },
       
       signup: async (email: string, password: string, name: string) => {
+        if (!auth) {
+          set({ error: 'Firebase not initialized' });
+          return false;
+        }
+        
         set({ isLoading: true, error: null });
         
         try {
-          const userCredential = await createUserWithEmailAndPassword(auth as Auth, email, password);
+          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
           const firebaseUser = userCredential.user;
           
           // Update Firebase Auth profile
@@ -226,10 +243,15 @@ export const useAuthStore = create<AuthState>()(
       },
       
       logout: async () => {
+        if (!auth) {
+          set({ error: 'Firebase not initialized' });
+          return;
+        }
+        
         set({ isLoading: true, error: null });
         
         try {
-          await signOut(auth as Auth);
+          await signOut(auth);
           
           set({ 
             user: null, 
@@ -248,10 +270,15 @@ export const useAuthStore = create<AuthState>()(
       },
       
       resetPassword: async (email: string) => {
+        if (!auth) {
+          set({ error: 'Firebase not initialized' });
+          return false;
+        }
+        
         set({ isLoading: true, error: null });
         
         try {
-          await sendPasswordResetEmail(auth as Auth, email);
+          await sendPasswordResetEmail(auth, email);
           set({ isLoading: false });
           return true;
         } catch (error: any) {
@@ -296,8 +323,8 @@ export const useAuthStore = create<AuthState>()(
           });
           
           // Update Firebase Auth profile if name changed
-          if (data.name && (auth as Auth).currentUser) {
-            await updateProfile((auth as Auth).currentUser!, {
+          if (data.name && auth?.currentUser) {
+            await updateProfile(auth.currentUser, {
               displayName: data.name
             });
           }
@@ -438,7 +465,12 @@ export const useAuthStore = create<AuthState>()(
       },
       
       initializeAuthListener: () => {
-        const unsubscribe = onAuthStateChanged(auth as Auth, async (firebaseUser) => {
+        if (!auth) {
+          console.error('Firebase auth not initialized');
+          return () => {};
+        }
+        
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
           const state = get();
           
           if (firebaseUser) {
@@ -449,7 +481,8 @@ export const useAuthStore = create<AuthState>()(
                   user: userData, 
                   isAuthenticated: true, 
                   isLoading: false,
-                  isGuest: false 
+                  isGuest: false,
+                  isInitialized: true
                 });
               }
             } catch (error) {
@@ -458,7 +491,8 @@ export const useAuthStore = create<AuthState>()(
                 user: null, 
                 isAuthenticated: false, 
                 isLoading: false,
-                isGuest: false 
+                isGuest: false,
+                isInitialized: true
               });
             }
           } else if (!state.isGuest) {
@@ -467,8 +501,11 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: false, 
               isLoading: false,
               isGuest: false,
-              hasSelectedRole: false
+              hasSelectedRole: false,
+              isInitialized: true
             });
+          } else {
+            set({ isInitialized: true });
           }
         });
         

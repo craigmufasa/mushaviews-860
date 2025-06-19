@@ -19,12 +19,25 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase Auth
-const auth = Platform.OS === 'web' 
-  ? getAuth(app)
-  : initializeAuth(app, {
+// Initialize Firebase Auth with proper persistence
+let auth;
+if (Platform.OS === 'web') {
+  auth = getAuth(app);
+} else {
+  // For React Native, use initializeAuth with AsyncStorage persistence
+  try {
+    auth = initializeAuth(app, {
       persistence: AsyncStorage as any
     });
+  } catch (error: any) {
+    // If already initialized, get the existing instance
+    if (error.code === 'auth/already-initialized') {
+      auth = getAuth(app);
+    } else {
+      throw error;
+    }
+  }
+}
 
 // Initialize Firestore
 const db = getFirestore(app);

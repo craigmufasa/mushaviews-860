@@ -1,8 +1,18 @@
 import { Redirect } from 'expo-router';
 import { useAuthStore } from '@/store/auth-store';
+import { View, Text } from 'react-native';
 
 export default function Index() {
-  const { isAuthenticated, isGuest, hasSelectedRole, user } = useAuthStore();
+  const { isAuthenticated, isGuest, hasSelectedRole, user, isInitialized } = useAuthStore();
+  
+  // Show loading while Firebase is initializing
+  if (!isInitialized) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
   
   // If user is not authenticated and not a guest, redirect to welcome
   if (!isAuthenticated && !isGuest) {

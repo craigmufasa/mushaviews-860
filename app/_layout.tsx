@@ -4,14 +4,16 @@ import { Slot, SplashScreen } from "expo-router";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { usePropertyStore } from "@/store/property-store";
+import { View, Text } from "react-native";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const { checkAuth, initializeAuthListener } = useAuthStore();
+  const { checkAuth, initializeAuthListener, isInitialized } = useAuthStore();
   const { initializePropertyListener } = usePropertyStore();
   const [appReady, setAppReady] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
   
   const [loaded, error] = useFonts({
     ...FontAwesome.font,
@@ -33,8 +35,11 @@ export default function RootLayout() {
 
         console.log('Initializing Firebase app...');
         
-        // Initialize Firebase auth listener
+        // Initialize Firebase auth listener first
         const unsubscribeAuth = initializeAuthListener();
+        
+        // Wait a bit for Firebase to initialize
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
         // Initialize property listener
         const unsubscribeProperties = initializePropertyListener();
@@ -50,8 +55,9 @@ export default function RootLayout() {
           unsubscribeAuth();
           unsubscribeProperties();
         };
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error initializing Firebase app:', error);
+        setInitError(error.message || 'Failed to initialize app');
         // Continue anyway to prevent app from being stuck
         setAppReady(true);
       }
@@ -72,14 +78,29 @@ export default function RootLayout() {
   }, [loaded, checkAuth, initializeAuthListener, initializePropertyListener]);
 
   useEffect(() => {
-    if (appReady) {
+    if (appReady && isInitialized) {
       console.log('App ready, hiding splash screen');
       SplashScreen.hideAsync();
     }
-  }, [appReady]);
+  }, [appReady, isInitialized]);
 
-  if (!appReady) {
+  // Show loading screen while initializing
+  if (!appReady || !isInitialized) {
     return null;
+  }
+
+  // Show error screen if initialization failed
+  if (initError) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>
+          Initialization Error
+        </Text>
+        <Text style={{ textAlign: 'center', color: '#666' }}>
+          {initError}
+        </Text>
+      </View>
+    );
   }
 
   return <Slot />;
