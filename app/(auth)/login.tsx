@@ -15,7 +15,7 @@ import { AuthInput } from '@/components/AuthInput';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, isLoading, error: authError } = useAuthStore();
+  const { login, isLoading, error: authError, clearError } = useAuthStore();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -57,6 +57,7 @@ export default function LoginScreen() {
     if (!validateForm()) return;
 
     setErrors({ email: '', password: '', general: '' });
+    clearError();
 
     try {
       const success = await login(email, password);
@@ -84,9 +85,9 @@ export default function LoginScreen() {
         <Text style={styles.title}>Welcome Back</Text>
         <Text style={styles.subtitle}>Sign in to continue to your account</Text>
         
-        {errors.general ? (
+        {(errors.general || authError) ? (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{errors.general}</Text>
+            <Text style={styles.errorText}>{errors.general || authError}</Text>
           </View>
         ) : null}
         

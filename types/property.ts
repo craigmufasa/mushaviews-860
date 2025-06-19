@@ -124,4 +124,31 @@ export interface Property {
   compressionLevel?: 'low' | 'medium' | 'high';
   supportedDevices?: DeviceCapability[];
   estimatedDataUsage?: string;
+  
+  // Firebase-specific fields
+  views?: number;
+  inquiries?: number;
+  lastViewedAt?: Date;
+  
+  // SEO and search optimization
+  keywords?: string[];
+  searchableText?: string;
+  
+  // Additional property details
+  propertyTax?: number;
+  hoaFees?: number;
+  utilities?: string[];
+  appliances?: string[];
+  parking?: {
+    type: 'garage' | 'driveway' | 'street' | 'covered' | 'none';
+    spaces: number;
+  };
+  
+  // Seller contact preferences
+  contactPreferences?: {
+    allowCalls?: boolean;
+    allowTexts?: boolean;
+    allowEmails?: boolean;
+    preferredContactTime?: string;
+  };
 }

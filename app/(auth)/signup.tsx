@@ -17,7 +17,7 @@ import { useAuthStore } from '@/store/auth-store';
 
 export default function SignupScreen() {
   const router = useRouter();
-  const { signup } = useAuthStore();
+  const { signup, isLoading, error: authError, clearError } = useAuthStore();
   
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -30,7 +30,6 @@ export default function SignupScreen() {
     confirmPassword?: string;
     general?: string;
   }>({});
-  const [isLoading, setIsLoading] = useState(false);
 
   const validateForm = () => {
     const newErrors: {
@@ -70,7 +69,8 @@ export default function SignupScreen() {
   const handleSignup = async () => {
     if (!validateForm()) return;
     
-    setIsLoading(true);
+    setErrors({});
+    clearError();
     
     try {
       const success = await signup(email, password, name);
@@ -78,9 +78,9 @@ export default function SignupScreen() {
       if (success) {
         // Navigate to role selection after successful signup
         router.replace('/role-selection');
-      } else {
+      } else if (authError) {
         setErrors({
-          general: 'An error occurred during signup',
+          general: authError,
         });
       }
     } catch (error: any) {
@@ -88,8 +88,6 @@ export default function SignupScreen() {
       setErrors({
         general: error.message || 'An error occurred during signup',
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -114,9 +112,9 @@ export default function SignupScreen() {
           </Text>
         </View>
         
-        {errors.general ? (
+        {(errors.general || authError) ? (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{errors.general}</Text>
+            <Text style={styles.errorText}>{errors.general || authError}</Text>
           </View>
         ) : null}
         
