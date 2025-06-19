@@ -10,8 +10,7 @@ import {
   sendPasswordResetEmail,
   onAuthStateChanged,
   User as FirebaseUser,
-  updateProfile,
-  Auth
+  updateProfile
 } from 'firebase/auth';
 import { 
   doc, 
