@@ -18,7 +18,7 @@ import { usePropertyStore } from '@/store/property-store';
 import { PropertyImageGallery } from '@/components/PropertyImageGallery';
 import { PropertyFeatures } from '@/components/PropertyFeatures';
 import { TourViewer } from '@/components/TourViewer';
-import { formatPrice, formatAddress } from '@/utils/format';
+import { formatPrice, formatAddress, formatDate, formatNumber } from '@/utils/format';
 
 export default function PropertyDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -52,8 +52,8 @@ export default function PropertyDetailScreen() {
       }
       
       await Share.share({
-        title: `${property.address} - ${formatPrice(property.price)}`,
-        message: `Check out this ${property.beds} bed, ${property.baths} bath property: ${formatAddress(property)}`,
+        title: `${property.address || 'Property'} - ${formatPrice(property.price)}`,
+        message: `Check out this ${property.beds || 0} bed, ${property.baths || 0} bath property: ${formatAddress(property)}`,
       });
     } catch (error) {
       console.error('Error sharing property:', error);
@@ -67,6 +67,11 @@ export default function PropertyDetailScreen() {
 
   const openMap = () => {
     const address = formatAddress(property);
+    if (address === 'Address not available') {
+      alert('Address not available for this property');
+      return;
+    }
+    
     const url = Platform.select({
       ios: `maps:0,0?q=${address}`,
       android: `geo:0,0?q=${address}`,
@@ -85,7 +90,7 @@ export default function PropertyDetailScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <PropertyImageGallery images={property.images} />
+        <PropertyImageGallery images={property.images || []} />
         
         <View style={styles.content}>
           {/* Price and Actions */}
@@ -112,15 +117,15 @@ export default function PropertyDetailScreen() {
           <View style={styles.infoRow}>
             <View style={styles.infoItem}>
               <Bed size={20} color={colors.primary} />
-              <Text style={styles.infoText}>{property.beds} Beds</Text>
+              <Text style={styles.infoText}>{property.beds || 0} Beds</Text>
             </View>
             <View style={styles.infoItem}>
               <Bath size={20} color={colors.primary} />
-              <Text style={styles.infoText}>{property.baths} Baths</Text>
+              <Text style={styles.infoText}>{property.baths || 0} Baths</Text>
             </View>
             <View style={styles.infoItem}>
               <Square size={20} color={colors.primary} />
-              <Text style={styles.infoText}>{property.sqft.toLocaleString()} sqft</Text>
+              <Text style={styles.infoText}>{formatNumber(property.sqft)} sqft</Text>
             </View>
           </View>
           
@@ -141,7 +146,9 @@ export default function PropertyDetailScreen() {
           {/* Description */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Description</Text>
-            <Text style={styles.description}>{property.description}</Text>
+            <Text style={styles.description}>
+              {property.description || 'No description available for this property.'}
+            </Text>
           </View>
           
           {/* Features */}
@@ -150,7 +157,7 @@ export default function PropertyDetailScreen() {
           {/* Listed Date */}
           <View style={styles.listedDateContainer}>
             <Text style={styles.listedDateText}>
-              Listed on {new Date(property.listedDate).toLocaleDateString()}
+              Listed on {formatDate(property.listedDate)}
             </Text>
           </View>
         </View>

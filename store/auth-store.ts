@@ -50,7 +50,7 @@ interface AuthState {
 const removeUndefinedValues = (obj: any): any => {
   const cleaned: any = {};
   Object.keys(obj).forEach(key => {
-    if (obj[key] !== undefined) {
+    if (obj[key] !== undefined && obj[key] !== null) {
       cleaned[key] = obj[key];
     }
   });

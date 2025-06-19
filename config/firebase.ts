@@ -22,21 +22,23 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firebase Auth with proper persistence and typing
 let auth: Auth;
 
-if (Platform.OS === 'web') {
-  auth = getAuth(app);
-} else {
-  // For React Native, use initializeAuth with AsyncStorage persistence
-  try {
+try {
+  if (Platform.OS === 'web') {
+    auth = getAuth(app);
+  } else {
+    // For React Native, use initializeAuth with AsyncStorage persistence
     auth = initializeAuth(app, {
       persistence: AsyncStorage as any
     });
-  } catch (error: any) {
-    // If already initialized, get the existing instance
-    if (error.code === 'auth/already-initialized') {
-      auth = getAuth(app);
-    } else {
-      throw error;
-    }
+  }
+} catch (error: any) {
+  // If already initialized, get the existing instance
+  if (error.code === 'auth/already-initialized') {
+    auth = getAuth(app);
+  } else {
+    // Fallback to getAuth if initializeAuth fails
+    console.warn('Failed to initialize auth with persistence, falling back to getAuth:', error);
+    auth = getAuth(app);
   }
 }
 
