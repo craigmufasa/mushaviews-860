@@ -35,6 +35,13 @@ import { Property, PropertyFilter } from '@/types/property';
 // const db = getFirestore(app);
 // const storage = getStorage(app);
 
+interface PendingUpload {
+  id: string;
+  type: 'property' | '3d-tour' | '3d-model';
+  data: any;
+  timestamp: Date;
+}
+
 interface PropertyState {
   properties: Property[];
   favoriteIds: string[];
@@ -42,6 +49,8 @@ interface PropertyState {
   filter: PropertyFilter;
   isLoading: boolean;
   error: string | null;
+  isOfflineMode: boolean;
+  pendingUploads: PendingUpload[];
   
   // Actions
   toggleFavorite: (id: string) => void;
@@ -50,6 +59,12 @@ interface PropertyState {
   resetFilter: () => void;
   getFilteredProperties: () => Property[];
   isFavorite: (id: string) => boolean;
+  
+  // Offline mode actions
+  setOfflineMode: (isOffline: boolean) => void;
+  addPendingUpload: (upload: Omit<PendingUpload, 'id' | 'timestamp'>) => void;
+  removePendingUpload: (id: string) => void;
+  clearPendingUploads: () => void;
   
   // Local property management
   fetchProperties: (forceRefresh?: boolean) => Promise<void>;
@@ -72,7 +87,6 @@ let mockProperties: Property[] = [
     address: '123 Main Street',
     city: 'New York',
     state: 'NY',
-    zipCode: '10001',
     price: 850000,
     beds: 2,
     baths: 2,
@@ -98,7 +112,6 @@ let mockProperties: Property[] = [
     address: '456 Oak Avenue',
     city: 'Los Angeles',
     state: 'CA',
-    zipCode: '90210',
     price: 1200000,
     beds: 4,
     baths: 3,
@@ -124,7 +137,6 @@ let mockProperties: Property[] = [
     address: '789 Sky Tower',
     city: 'Miami',
     state: 'FL',
-    zipCode: '33101',
     price: 2500000,
     beds: 3,
     baths: 3,
@@ -146,6 +158,9 @@ let mockProperties: Property[] = [
 
 // Helper to generate property ID - FIREBASE INTEGRATION POINT 4: Firestore provides document IDs
 const generatePropertyId = () => `prop_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+// Helper to generate upload ID
+const generateUploadId = () => `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 // FIREBASE INTEGRATION POINT 5: Image upload helper function
 // const uploadPropertyImages = async (images: string[], propertyId: string): Promise<string[]> => {
@@ -181,6 +196,8 @@ export const usePropertyStore = create<PropertyState>()(
       filter: {},
       isLoading: false,
       error: null,
+      isOfflineMode: false,
+      pendingUploads: [],
 
       toggleFavorite: (id: string) => {
         set((state) => {
@@ -244,6 +261,33 @@ export const usePropertyStore = create<PropertyState>()(
 
       isFavorite: (id: string) => {
         return get().favoriteIds.includes(id);
+      },
+
+      setOfflineMode: (isOffline: boolean) => {
+        set({ isOfflineMode: isOffline });
+      },
+
+      addPendingUpload: (upload: Omit<PendingUpload, 'id' | 'timestamp'>) => {
+        set((state) => ({
+          pendingUploads: [
+            ...state.pendingUploads,
+            {
+              ...upload,
+              id: generateUploadId(),
+              timestamp: new Date(),
+            },
+          ],
+        }));
+      },
+
+      removePendingUpload: (id: string) => {
+        set((state) => ({
+          pendingUploads: state.pendingUploads.filter((upload) => upload.id !== id),
+        }));
+      },
+
+      clearPendingUploads: () => {
+        set({ pendingUploads: [] });
       },
 
       clearError: () => {
@@ -559,6 +603,7 @@ export const usePropertyStore = create<PropertyState>()(
         favoriteIds: state.favoriteIds,
         recentlyViewed: state.recentlyViewed,
         filter: state.filter,
+        pendingUploads: state.pendingUploads,
       }),
     }
   )
@@ -598,5 +643,29 @@ export const usePropertyStore = create<PropertyState>()(
 //     });
 //   } catch (error) {
 //     console.error('Error syncing favorites:', error);
+//   }
+// };
+
+// FIREBASE INTEGRATION POINT 15: Process pending uploads when back online
+// export const processPendingUploads = async () => {
+//   const { pendingUploads, removePendingUpload } = usePropertyStore.getState();
+//   
+//   for (const upload of pendingUploads) {
+//     try {
+//       switch (upload.type) {
+//         case 'property':
+//           // Process property upload
+//           break;
+//         case '3d-tour':
+//           // Process 3D tour upload
+//           break;
+//         case '3d-model':
+//           // Process 3D model upload
+//           break;
+//       }
+//       removePendingUpload(upload.id);
+//     } catch (error) {
+//       console.error('Error processing pending upload:', upload.id, error);
+//     }
 //   }
 // };

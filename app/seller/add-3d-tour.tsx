@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
+import { WebView } from 'react-native-webview';
 import * as ImagePicker from 'expo-image-picker';
 import { Box, Plus, X, Camera, Link, Wifi, WifiOff, Upload, AlertCircle, Eye, Maximize2, Globe } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
@@ -47,6 +48,7 @@ export default function Add3DTourScreen() {
   const [enableVRMode, setEnableVRMode] = useState(true);
   const [optimizeForLowEnd, setOptimizeForLowEnd] = useState(false);
   const [showPanoramaCapture, setShowPanoramaCapture] = useState(false);
+  const [showWebViewPreview, setShowWebViewPreview] = useState(false);
   
   // Embed settings
   const [embedSettings, setEmbedSettings] = useState({
@@ -299,6 +301,43 @@ export default function Add3DTourScreen() {
     }
   };
 
+  if (showWebViewPreview && embedUrl) {
+    return (
+      <SafeAreaView style={styles.webViewContainer} edges={['top']}>
+        <Stack.Screen options={{ title: '3D Tour Preview' }} />
+        
+        <View style={styles.webViewHeader}>
+          <TouchableOpacity onPress={() => setShowWebViewPreview(false)} style={styles.closeButton}>
+            <X size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.webViewTitle}>3D Tour Preview</Text>
+          <View style={styles.placeholder} />
+        </View>
+
+        <WebView
+          source={{ uri: embedUrl }}
+          style={styles.webView}
+          startInLoadingState={true}
+          renderLoading={() => (
+            <View style={styles.webViewLoading}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.webViewLoadingText}>Loading 3D Tour...</Text>
+            </View>
+          )}
+          onError={(syntheticEvent) => {
+            const { nativeEvent } = syntheticEvent;
+            console.warn('WebView error: ', nativeEvent);
+            Alert.alert('Error', 'Failed to load 3D tour. Please check the URL.');
+          }}
+          allowsFullscreenVideo={embedSettings.allowFullscreen}
+          mediaPlaybackRequiresUserAction={!embedSettings.autoplay}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+        />
+      </SafeAreaView>
+    );
+  }
+
   if (showPanoramaCapture) {
     return (
       <SafeAreaView style={styles.cameraContainer} edges={['top']}>
@@ -424,7 +463,7 @@ export default function Add3DTourScreen() {
           ) : (
             <View style={styles.emptyPropertiesContainer}>
               <Text style={styles.emptyPropertiesText}>
-                You don't have any properties yet. Add a property first.
+                You do not have any properties yet. Add a property first.
               </Text>
               <TouchableOpacity
                 style={styles.addPropertyButton}
@@ -536,6 +575,17 @@ export default function Add3DTourScreen() {
                     Supported platforms: Matterport, Zillow 3D Home, Kuula, Roundme, and others
                   </Text>
                 </View>
+
+                {/* Preview Button */}
+                {validateEmbedUrl(embedUrl) && (
+                  <TouchableOpacity
+                    style={styles.previewButton}
+                    onPress={() => setShowWebViewPreview(true)}
+                  >
+                    <Eye size={20} color={colors.primary} />
+                    <Text style={styles.previewButtonText}>Preview 3D Tour</Text>
+                  </TouchableOpacity>
+                )}
                 
                 <View style={styles.embedSettingsContainer}>
                   <Text style={styles.settingLabel}>Embed Settings:</Text>
@@ -543,10 +593,10 @@ export default function Add3DTourScreen() {
                   <View style={styles.settingsGrid}>
                     <TouchableOpacity 
                       style={styles.toggleSetting}
-                      onPress={() => setEmbedSettings({
-                        ...embedSettings,
-                        allowFullscreen: !embedSettings.allowFullscreen
-                      })}
+                      onPress={() => setEmbedSettings(prev => ({
+                        ...prev,
+                        allowFullscreen: !prev.allowFullscreen
+                      }))}
                     >
                       <Maximize2 size={20} color={embedSettings.allowFullscreen ? colors.primary : colors.textLight} />
                       <Text style={[
@@ -559,10 +609,10 @@ export default function Add3DTourScreen() {
                     
                     <TouchableOpacity 
                       style={styles.toggleSetting}
-                      onPress={() => setEmbedSettings({
-                        ...embedSettings,
-                        showControls: !embedSettings.showControls
-                      })}
+                      onPress={() => setEmbedSettings(prev => ({
+                        ...prev,
+                        showControls: !prev.showControls
+                      }))}
                     >
                       <Eye size={20} color={embedSettings.showControls ? colors.primary : colors.textLight} />
                       <Text style={[
@@ -884,6 +934,42 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  webViewContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  webViewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  webViewTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  webView: {
+    flex: 1,
+  },
+  webViewLoading: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+  },
+  webViewLoadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: colors.text,
+  },
   cameraContainer: {
     flex: 1,
     backgroundColor: '#000',
@@ -1095,6 +1181,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textLight,
     marginTop: 4,
+  },
+  previewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primaryLight,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  previewButtonText: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '500',
   },
   embedSettingsContainer: {
     marginTop: 16,
