@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Mail, ArrowLeft } from 'lucide-react-native';

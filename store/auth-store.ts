@@ -3,40 +3,6 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User } from '@/types/user';
 
-// FIREBASE INTEGRATION POINT 1: Firebase imports would go here
-// import { initializeApp } from 'firebase/app';
-// import { 
-//   getAuth, 
-//   signInWithEmailAndPassword, 
-//   createUserWithEmailAndPassword,
-//   signOut,
-//   sendPasswordResetEmail,
-//   onAuthStateChanged,
-//   User as FirebaseUser
-// } from 'firebase/auth';
-// import { 
-//   getFirestore, 
-//   doc, 
-//   setDoc, 
-//   getDoc, 
-//   updateDoc,
-//   collection,
-//   addDoc 
-// } from 'firebase/firestore';
-
-// FIREBASE INTEGRATION POINT 2: Firebase config and initialization
-// const firebaseConfig = {
-//   apiKey: "your-api-key",
-//   authDomain: "your-project.firebaseapp.com",
-//   projectId: "your-project-id",
-//   storageBucket: "your-project.appspot.com",
-//   messagingSenderId: "123456789",
-//   appId: "your-app-id"
-// };
-// const app = initializeApp(firebaseConfig);
-// const auth = getAuth(app);
-// const db = getFirestore(app);
-
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
@@ -60,10 +26,10 @@ interface AuthState {
   clearError: () => void;
 }
 
-// Mock user database - FIREBASE INTEGRATION POINT 3: This would be replaced by Firestore
+// Mock user database
 const mockUsers: { [email: string]: { password: string; user: User } } = {};
 
-// Helper to generate user ID - FIREBASE INTEGRATION POINT 4: Firebase Auth provides user IDs
+// Helper to generate user ID
 const generateUserId = () => `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 export const useAuthStore = create<AuthState>()(
@@ -88,25 +54,6 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          // FIREBASE INTEGRATION POINT 5: Replace mock login with Firebase Auth
-          // const userCredential = await signInWithEmailAndPassword(auth, email, password);
-          // const firebaseUser = userCredential.user;
-          // 
-          // // Get user profile from Firestore
-          // const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          // if (!userDoc.exists()) {
-          //   throw new Error('User profile not found');
-          // }
-          // 
-          // const userData = userDoc.data() as User;
-          // set({ 
-          //   user: userData, 
-          //   isAuthenticated: true, 
-          //   isLoading: false, 
-          //   isGuest: false,
-          //   hasSelectedRole: false,
-          // });
-          
           // Simulate network delay
           await new Promise(resolve => setTimeout(resolve, 1000));
           
@@ -142,30 +89,6 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          // FIREBASE INTEGRATION POINT 6: Replace mock signup with Firebase Auth + Firestore
-          // const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-          // const firebaseUser = userCredential.user;
-          // 
-          // const newUser: User = {
-          //   id: firebaseUser.uid,
-          //   name,
-          //   email: email.toLowerCase(),
-          //   isSeller: false,
-          //   sellerModeActive: false,
-          //   createdAt: new Date().toISOString(),
-          // };
-          // 
-          // // Save user profile to Firestore
-          // await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
-          // 
-          // set({ 
-          //   user: newUser, 
-          //   isAuthenticated: true, 
-          //   isLoading: false, 
-          //   isGuest: false,
-          //   hasSelectedRole: false,
-          // });
-          
           // Simulate network delay
           await new Promise(resolve => setTimeout(resolve, 1000));
           
@@ -216,9 +139,6 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          // FIREBASE INTEGRATION POINT 7: Replace with Firebase Auth signOut
-          // await signOut(auth);
-          
           // Simulate network delay
           await new Promise(resolve => setTimeout(resolve, 500));
           
@@ -242,9 +162,6 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          // FIREBASE INTEGRATION POINT 8: Replace with Firebase Auth password reset
-          // await sendPasswordResetEmail(auth, email);
-          
           // Simulate network delay
           await new Promise(resolve => setTimeout(resolve, 1000));
           
@@ -277,10 +194,6 @@ export const useAuthStore = create<AuthState>()(
           if (!user) {
             throw new Error('User not authenticated');
           }
-          
-          // FIREBASE INTEGRATION POINT 9: Replace with Firestore update
-          // const updatedUser = { ...user, ...data };
-          // await updateDoc(doc(db, 'users', user.id), data);
           
           // Simulate network delay
           await new Promise(resolve => setTimeout(resolve, 500));
@@ -318,12 +231,6 @@ export const useAuthStore = create<AuthState>()(
           if (!user) {
             throw new Error('User not authenticated');
           }
-          
-          // FIREBASE INTEGRATION POINT 10: Replace with Firestore update
-          // await updateDoc(doc(db, 'users', user.id), { 
-          //   isSeller: true, 
-          //   sellerModeActive: true 
-          // });
           
           // Simulate network delay
           await new Promise(resolve => setTimeout(resolve, 1000));
@@ -365,11 +272,6 @@ export const useAuthStore = create<AuthState>()(
           if (!user || !user.isSeller) {
             throw new Error('User is not a seller');
           }
-          
-          // FIREBASE INTEGRATION POINT 11: Replace with Firestore update
-          // await updateDoc(doc(db, 'users', user.id), { 
-          //   sellerModeActive: !user.sellerModeActive 
-          // });
           
           // Simulate network delay
           await new Promise(resolve => setTimeout(resolve, 500));
@@ -416,30 +318,6 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          // FIREBASE INTEGRATION POINT 12: Replace with Firebase Auth state listener
-          // This would typically be handled by onAuthStateChanged listener
-          // onAuthStateChanged(auth, async (firebaseUser) => {
-          //   if (firebaseUser) {
-          //     const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          //     if (userDoc.exists()) {
-          //       const userData = userDoc.data() as User;
-          //       set({ 
-          //         user: userData, 
-          //         isAuthenticated: true, 
-          //         isLoading: false,
-          //         isGuest: false 
-          //       });
-          //     }
-          //   } else {
-          //     set({ 
-          //       user: null, 
-          //       isAuthenticated: false, 
-          //       isLoading: false,
-          //       isGuest: false 
-          //     });
-          //   }
-          // });
-          
           // Simulate network delay
           await new Promise(resolve => setTimeout(resolve, 500));
           
@@ -491,26 +369,3 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
-
-// FIREBASE INTEGRATION POINT 13: Auth state listener setup
-// This would typically be called in your app's root component or _layout.tsx
-// export const initializeAuthListener = () => {
-//   const { setUser } = useAuthStore.getState();
-//   
-//   return onAuthStateChanged(auth, async (firebaseUser) => {
-//     if (firebaseUser) {
-//       try {
-//         const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-//         if (userDoc.exists()) {
-//           const userData = userDoc.data() as User;
-//           setUser(userData);
-//         }
-//       } catch (error) {
-//         console.error('Error fetching user data:', error);
-//         setUser(null);
-//       }
-//     } else {
-//       setUser(null);
-//     }
-//   });
-// };

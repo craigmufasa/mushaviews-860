@@ -3,38 +3,6 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Property, PropertyFilter } from '@/types/property';
 
-// FIREBASE INTEGRATION POINT 1: Firebase imports would go here
-// import { initializeApp } from 'firebase/app';
-// import { 
-//   getFirestore, 
-//   collection, 
-//   doc, 
-//   getDocs, 
-//   getDoc,
-//   addDoc, 
-//   updateDoc, 
-//   deleteDoc,
-//   query, 
-//   where, 
-//   orderBy, 
-//   limit,
-//   onSnapshot,
-//   Timestamp 
-// } from 'firebase/firestore';
-// import { 
-//   getStorage, 
-//   ref, 
-//   uploadBytes, 
-//   getDownloadURL,
-//   deleteObject 
-// } from 'firebase/storage';
-
-// FIREBASE INTEGRATION POINT 2: Firebase config (same as auth-store)
-// const firebaseConfig = { ... };
-// const app = initializeApp(firebaseConfig);
-// const db = getFirestore(app);
-// const storage = getStorage(app);
-
 interface PendingUpload {
   id: string;
   type: 'property' | '3d-tour' | '3d-model';
@@ -77,7 +45,7 @@ interface PropertyState {
   clearError: () => void;
 }
 
-// Mock properties database - FIREBASE INTEGRATION POINT 3: This would be replaced by Firestore
+// Mock properties database
 let mockProperties: Property[] = [
   {
     id: '1',
@@ -156,36 +124,11 @@ let mockProperties: Property[] = [
   }
 ];
 
-// Helper to generate property ID - FIREBASE INTEGRATION POINT 4: Firestore provides document IDs
+// Helper to generate property ID
 const generatePropertyId = () => `prop_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 // Helper to generate upload ID
 const generateUploadId = () => `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-// FIREBASE INTEGRATION POINT 5: Image upload helper function
-// const uploadPropertyImages = async (images: string[], propertyId: string): Promise<string[]> => {
-//   const uploadPromises = images.map(async (imageUri, index) => {
-//     const response = await fetch(imageUri);
-//     const blob = await response.blob();
-//     const imageRef = ref(storage, `properties/${propertyId}/image_${index}`);
-//     await uploadBytes(imageRef, blob);
-//     return await getDownloadURL(imageRef);
-//   });
-//   return Promise.all(uploadPromises);
-// };
-
-// FIREBASE INTEGRATION POINT 6: Delete property images helper function
-// const deletePropertyImages = async (imageUrls: string[]): Promise<void> => {
-//   const deletePromises = imageUrls.map(async (url) => {
-//     try {
-//       const imageRef = ref(storage, url);
-//       await deleteObject(imageRef);
-//     } catch (error) {
-//       console.warn('Failed to delete image:', url, error);
-//     }
-//   });
-//   await Promise.all(deletePromises);
-// };
 
 export const usePropertyStore = create<PropertyState>()(
   persist(
@@ -298,27 +241,6 @@ export const usePropertyStore = create<PropertyState>()(
         set({ isLoading: true, error: null });
         
         try {
-          // FIREBASE INTEGRATION POINT 7: Replace with Firestore query
-          // const propertiesRef = collection(db, 'properties');
-          // const q = query(propertiesRef, orderBy('createdAt', 'desc'));
-          // const querySnapshot = await getDocs(q);
-          // 
-          // const properties: Property[] = [];
-          // querySnapshot.forEach((doc) => {
-          //   const data = doc.data();
-          //   properties.push({
-          //     id: doc.id,
-          //     ...data,
-          //     createdAt: data.createdAt?.toDate() || new Date(),
-          //     updatedAt: data.updatedAt?.toDate() || new Date(),
-          //   } as Property);
-          // });
-          // 
-          // set({ 
-          //   properties,
-          //   isLoading: false 
-          // });
-          
           // Simulate network delay
           await new Promise(resolve => setTimeout(resolve, 1000));
           
@@ -346,29 +268,6 @@ export const usePropertyStore = create<PropertyState>()(
       fetchSellerProperties: async (sellerId: string) => {
         set({ isLoading: true, error: null });
         try {
-          // FIREBASE INTEGRATION POINT 8: Replace with Firestore query for seller properties
-          // const propertiesRef = collection(db, 'properties');
-          // const q = query(
-          //   propertiesRef, 
-          //   where('sellerId', '==', sellerId),
-          //   orderBy('createdAt', 'desc')
-          // );
-          // const querySnapshot = await getDocs(q);
-          // 
-          // const sellerProperties: Property[] = [];
-          // querySnapshot.forEach((doc) => {
-          //   const data = doc.data();
-          //   sellerProperties.push({
-          //     id: doc.id,
-          //     ...data,
-          //     createdAt: data.createdAt?.toDate() || new Date(),
-          //     updatedAt: data.updatedAt?.toDate() || new Date(),
-          //   } as Property);
-          // });
-          // 
-          // set({ isLoading: false });
-          // return sellerProperties;
-          
           // Simulate network delay
           await new Promise(resolve => setTimeout(resolve, 500));
           
@@ -396,32 +295,6 @@ export const usePropertyStore = create<PropertyState>()(
         set({ isLoading: true, error: null });
         
         try {
-          // FIREBASE INTEGRATION POINT 9: Replace with Firestore add and Firebase Storage upload
-          // // First, add the property to get an ID
-          // const propertiesRef = collection(db, 'properties');
-          // const docRef = await addDoc(propertiesRef, {
-          //   ...property,
-          //   createdAt: Timestamp.now(),
-          //   updatedAt: Timestamp.now(),
-          //   images: [], // Will be updated after image upload
-          // });
-          // 
-          // // Upload images to Firebase Storage
-          // const uploadedImageUrls = await uploadPropertyImages(images, docRef.id);
-          // 
-          // // Update the property with image URLs
-          // await updateDoc(docRef, {
-          //   images: uploadedImageUrls
-          // });
-          // 
-          // const newProperty: Property = {
-          //   id: docRef.id,
-          //   ...property,
-          //   images: uploadedImageUrls,
-          //   createdAt: new Date(),
-          //   updatedAt: new Date(),
-          // };
-          
           // Simulate network delay
           await new Promise(resolve => setTimeout(resolve, 1500));
           
@@ -456,40 +329,6 @@ export const usePropertyStore = create<PropertyState>()(
         set({ isLoading: true, error: null });
         
         try {
-          // FIREBASE INTEGRATION POINT 10: Replace with Firestore update and Firebase Storage
-          // const propertyRef = doc(db, 'properties', id);
-          // const propertyDoc = await getDoc(propertyRef);
-          // 
-          // if (!propertyDoc.exists()) {
-          //   throw new Error('Property not found');
-          // }
-          // 
-          // const currentData = propertyDoc.data() as Property;
-          // let imageUrls = currentData.images;
-          // 
-          // // If new images are provided, upload them and delete old ones
-          // if (newImages && newImages.length > 0) {
-          //   // Delete old images
-          //   await deletePropertyImages(currentData.images);
-          //   
-          //   // Upload new images
-          //   imageUrls = await uploadPropertyImages(newImages, id);
-          // }
-          // 
-          // const updateData = {
-          //   ...property,
-          //   images: imageUrls,
-          //   updatedAt: Timestamp.now(),
-          // };
-          // 
-          // await updateDoc(propertyRef, updateData);
-          // 
-          // const updatedProperty = {
-          //   ...currentData,
-          //   ...updateData,
-          //   updatedAt: new Date(),
-          // };
-          
           // Simulate network delay
           await new Promise(resolve => setTimeout(resolve, 1000));
           
@@ -530,20 +369,6 @@ export const usePropertyStore = create<PropertyState>()(
         set({ isLoading: true, error: null });
         
         try {
-          // FIREBASE INTEGRATION POINT 11: Replace with Firestore delete and Firebase Storage cleanup
-          // const propertyRef = doc(db, 'properties', id);
-          // const propertyDoc = await getDoc(propertyRef);
-          // 
-          // if (propertyDoc.exists()) {
-          //   const propertyData = propertyDoc.data() as Property;
-          //   
-          //   // Delete property images from Firebase Storage
-          //   await deletePropertyImages(propertyData.images);
-          //   
-          //   // Delete property document from Firestore
-          //   await deleteDoc(propertyRef);
-          // }
-          
           // Simulate network delay
           await new Promise(resolve => setTimeout(resolve, 500));
           
@@ -570,21 +395,6 @@ export const usePropertyStore = create<PropertyState>()(
 
       getPropertyById: async (id: string) => {
         try {
-          // FIREBASE INTEGRATION POINT 12: Replace with Firestore get document
-          // const propertyRef = doc(db, 'properties', id);
-          // const propertyDoc = await getDoc(propertyRef);
-          // 
-          // if (propertyDoc.exists()) {
-          //   const data = propertyDoc.data();
-          //   return {
-          //     id: propertyDoc.id,
-          //     ...data,
-          //     createdAt: data.createdAt?.toDate() || new Date(),
-          //     updatedAt: data.updatedAt?.toDate() || new Date(),
-          //   } as Property;
-          // }
-          // return null;
-          
           // Simulate network delay
           await new Promise(resolve => setTimeout(resolve, 300));
           
@@ -608,64 +418,3 @@ export const usePropertyStore = create<PropertyState>()(
     }
   )
 );
-
-// FIREBASE INTEGRATION POINT 13: Real-time property listener setup
-// This would typically be called in your app to listen for real-time updates
-// export const initializePropertyListener = () => {
-//   const { properties } = usePropertyStore.getState();
-//   
-//   const propertiesRef = collection(db, 'properties');
-//   const q = query(propertiesRef, orderBy('createdAt', 'desc'));
-//   
-//   return onSnapshot(q, (querySnapshot) => {
-//     const updatedProperties: Property[] = [];
-//     querySnapshot.forEach((doc) => {
-//       const data = doc.data();
-//       updatedProperties.push({
-//         id: doc.id,
-//         ...data,
-//         createdAt: data.createdAt?.toDate() || new Date(),
-//         updatedAt: data.updatedAt?.toDate() || new Date(),
-//       } as Property);
-//     });
-//     
-//     usePropertyStore.setState({ properties: updatedProperties });
-//   });
-// };
-
-// FIREBASE INTEGRATION POINT 14: Favorites sync with Firestore
-// You might want to sync favorites with user's Firestore document
-// export const syncFavoritesWithFirestore = async (userId: string, favoriteIds: string[]) => {
-//   try {
-//     const userRef = doc(db, 'users', userId);
-//     await updateDoc(userRef, {
-//       favoriteProperties: favoriteIds
-//     });
-//   } catch (error) {
-//     console.error('Error syncing favorites:', error);
-//   }
-// };
-
-// FIREBASE INTEGRATION POINT 15: Process pending uploads when back online
-// export const processPendingUploads = async () => {
-//   const { pendingUploads, removePendingUpload } = usePropertyStore.getState();
-//   
-//   for (const upload of pendingUploads) {
-//     try {
-//       switch (upload.type) {
-//         case 'property':
-//           // Process property upload
-//           break;
-//         case '3d-tour':
-//           // Process 3D tour upload
-//           break;
-//         case '3d-model':
-//           // Process 3D model upload
-//           break;
-//       }
-//       removePendingUpload(upload.id);
-//     } catch (error) {
-//       console.error('Error processing pending upload:', upload.id, error);
-//     }
-//   }
-// };

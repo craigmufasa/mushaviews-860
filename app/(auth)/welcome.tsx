@@ -4,10 +4,8 @@ import {
   View, 
   Text, 
   TouchableOpacity, 
-  Image, 
   ImageBackground,
-  Dimensions,
-  ActivityIndicator
+  Dimensions
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -20,8 +18,7 @@ const { width } = Dimensions.get('window');
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const { loginWithGoogle, continueAsGuest } = useAuthStore();
-  const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
+  const { continueAsGuest } = useAuthStore();
 
   const handleLogin = () => {
     router.push('/login');
@@ -29,20 +26,6 @@ export default function WelcomeScreen() {
 
   const handleSignup = () => {
     router.push('/signup');
-  };
-
-  const handleGoogleSignIn = async () => {
-    setIsGoogleLoading(true);
-    try {
-      const success = await loginWithGoogle();
-      if (success) {
-        router.replace('/role-selection');
-      }
-    } catch (error) {
-      console.error('Google sign-in error:', error);
-    } finally {
-      setIsGoogleLoading(false);
-    }
   };
 
   const handleGuestAccess = () => {
@@ -84,24 +67,6 @@ export default function WelcomeScreen() {
                 onPress={handleSignup}
               >
                 <Text style={styles.secondaryButtonText}>Create Account</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.googleButton} 
-                onPress={handleGoogleSignIn}
-                disabled={isGoogleLoading}
-              >
-                {isGoogleLoading ? (
-                  <ActivityIndicator color={colors.text} />
-                ) : (
-                  <>
-                    <Image 
-                      source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg' }} 
-                      style={styles.googleIcon} 
-                    />
-                    <Text style={styles.googleButtonText}>Continue with Google</Text>
-                  </>
-                )}
               </TouchableOpacity>
               
               <TouchableOpacity 
@@ -211,29 +176,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 16,
     fontWeight: '600',
-  },
-  googleButton: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  googleIcon: {
-    width: 20,
-    height: 20,
-    marginRight: 10,
-  },
-  googleButtonText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '500',
   },
   guestButton: {
     flexDirection: 'row',
