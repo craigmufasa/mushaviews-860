@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User } from '@/types/user';
+import { User, UserRole } from '@/types/user';
+import * as FirebaseAuth from '@/firebase/auth';
+import { Platform } from 'react-native';
 
 interface AuthState {
   user: User | null;
@@ -11,9 +13,19 @@ interface AuthState {
   isGuest: boolean;
   hasSelectedRole: boolean;
   
+  // Offline support
+  isOfflineMode: boolean;
+  lastSyncTime: number;
+  pendingAuthActions: Array<{
+    type: 'update_profile' | 'upgrade_to_seller';
+    data: any;
+    timestamp: number;
+  }>;
+  
   // Actions
   setUser: (user: User | null) => void;
   login: (email: string, password: string) => Promise<boolean>;
+  loginWithGoogle: () => Promise<boolean>;
   signup: (email: string, password: string, name: string) => Promise<boolean>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<boolean>;
@@ -23,14 +35,22 @@ interface AuthState {
   continueAsGuest: () => void;
   checkAuth: () => Promise<boolean>;
   setHasSelectedRole: (value: boolean) => void;
+  
+  // Offline management
+  enableOfflineMode: () => void;
+  enableOnlineMode: () => Promise<void>;
+  syncOfflineAuthData: () => Promise<void>;
+  
   clearError: () => void;
 }
 
-// Mock user database
-const mockUsers: { [email: string]: { password: string; user: User } } = {};
-
-// Helper to generate user ID
-const generateUserId = () => `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+// Network detection
+const isOnline = (): boolean => {
+  if (Platform.OS === 'web') {
+    return navigator.onLine;
+  }
+  return true; // Assume online for native unless explicitly set
+};
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -41,6 +61,11 @@ export const useAuthStore = create<AuthState>()(
       error: null,
       isGuest: false,
       hasSelectedRole: false,
+      
+      // Offline state
+      isOfflineMode: false,
+      lastSyncTime: 0,
+      pendingAuthActions: [],
       
       setUser: (user: User | null) => {
         set({ 
@@ -54,32 +79,61 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          // Simulate network delay
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          // Check if user exists in mock database
-          const userData = mockUsers[email.toLowerCase()];
-          if (!userData) {
-            throw new Error('No account found with this email address');
+          // Check if offline
+          if (!isOnline()) {
+            throw new Error('Cannot login while offline. Please check your internet connection.');
           }
           
-          if (userData.password !== password) {
-            throw new Error('Incorrect password');
-          }
-          
+          const user = await FirebaseAuth.signIn(email, password);
           set({ 
-            user: userData.user, 
+            user, 
             isAuthenticated: true, 
             isLoading: false, 
             isGuest: false,
             hasSelectedRole: false,
+            lastSyncTime: Date.now(),
           });
           return true;
         } catch (error: any) {
-          console.error('Login error in store:', error);
           set({ 
             isLoading: false, 
             error: error.message || 'Failed to login' 
+          });
+          return false;
+        }
+      },
+      
+      loginWithGoogle: async () => {
+        set({ isLoading: true, error: null });
+        
+        try {
+          // Only available on web for now
+          if (Platform.OS !== 'web') {
+            set({ 
+              isLoading: false, 
+              error: 'Google sign-in is currently only available on web' 
+            });
+            return false;
+          }
+          
+          if (!isOnline()) {
+            throw new Error('Cannot login while offline. Please check your internet connection.');
+          }
+          
+          const user = await FirebaseAuth.signInWithGoogle();
+          set({ 
+            user, 
+            isAuthenticated: true, 
+            isLoading: false, 
+            isGuest: false,
+            hasSelectedRole: false,
+            lastSyncTime: Date.now(),
+          });
+          return true;
+        } catch (error: any) {
+          set({ 
+            isLoading: false, 
+            error: error.message || 'Failed to login with Google' 
           });
           return false;
         }
@@ -89,44 +143,21 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          // Simulate network delay
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          // Check if user already exists
-          if (mockUsers[email.toLowerCase()]) {
-            throw new Error('An account with this email already exists');
+          if (!isOnline()) {
+            throw new Error('Cannot sign up while offline. Please check your internet connection.');
           }
           
-          if (password.length < 6) {
-            throw new Error('Password should be at least 6 characters');
-          }
-          
-          // Create new user
-          const newUser: User = {
-            id: generateUserId(),
-            name,
-            email: email.toLowerCase(),
-            isSeller: false,
-            sellerModeActive: false,
-            createdAt: new Date().toISOString(),
-          };
-          
-          // Store in mock database
-          mockUsers[email.toLowerCase()] = {
-            password,
-            user: newUser
-          };
-          
+          const user = await FirebaseAuth.signUp(email, password, name);
           set({ 
-            user: newUser, 
+            user, 
             isAuthenticated: true, 
             isLoading: false, 
             isGuest: false,
             hasSelectedRole: false,
+            lastSyncTime: Date.now(),
           });
           return true;
         } catch (error: any) {
-          console.error('Signup error in store:', error);
           set({ 
             isLoading: false, 
             error: error.message || 'Failed to sign up' 
@@ -139,8 +170,9 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          // Simulate network delay
-          await new Promise(resolve => setTimeout(resolve, 500));
+          if (isOnline()) {
+            await FirebaseAuth.signOut();
+          }
           
           set({ 
             user: null, 
@@ -148,9 +180,9 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
             isGuest: false,
             hasSelectedRole: false,
+            pendingAuthActions: [], // Clear pending actions on logout
           });
         } catch (error: any) {
-          console.error('Logout error in store:', error);
           set({ 
             isLoading: false, 
             error: error.message || 'Failed to logout' 
@@ -162,21 +194,14 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          // Simulate network delay
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          // Check if user exists
-          if (!mockUsers[email.toLowerCase()]) {
-            throw new Error('No account found with this email address');
+          if (!isOnline()) {
+            throw new Error('Cannot reset password while offline. Please check your internet connection.');
           }
           
-          // In a real app, this would send an email
-          console.log('Password reset email sent to:', email);
-          
+          await FirebaseAuth.resetPassword(email);
           set({ isLoading: false });
           return true;
         } catch (error: any) {
-          console.error('Reset password error in store:', error);
           set({ 
             isLoading: false, 
             error: error.message || 'Failed to reset password' 
@@ -195,24 +220,66 @@ export const useAuthStore = create<AuthState>()(
             throw new Error('User not authenticated');
           }
           
-          // Simulate network delay
-          await new Promise(resolve => setTimeout(resolve, 500));
-          
-          // Update user data
-          const updatedUser = { ...user, ...data };
-          
-          // Update in mock database if user exists
-          if (user.email && mockUsers[user.email]) {
-            mockUsers[user.email].user = updatedUser;
+          // If offline, queue the action
+          if (!isOnline() || state.isOfflineMode) {
+            const pendingAction = {
+              type: 'update_profile' as const,
+              data,
+              timestamp: Date.now(),
+            };
+            
+            // Update local user data
+            const updatedUser = { ...user, ...data };
+            
+            set({ 
+              user: updatedUser,
+              pendingAuthActions: [...state.pendingAuthActions, pendingAction],
+              isLoading: false 
+            });
+            return true;
           }
           
+          const updatedUser = await FirebaseAuth.updateUserProfile(user.id, data);
           set({ 
             user: updatedUser, 
             isLoading: false,
+            lastSyncTime: Date.now(),
           });
           return true;
         } catch (error: any) {
           console.error('Update profile error in store:', error);
+          
+          // If it's a "document not found" error, try to create the user document
+          if (error.message.includes('No document to update') || error.message.includes('not-found')) {
+            try {
+              const { user } = state;
+              if (user) {
+                // Create the user document first
+                const updatedUser = await FirebaseAuth.updateUserProfile(user.id, {
+                  name: user.name,
+                  email: user.email,
+                  photoURL: user.photoURL,
+                  isSeller: user.isSeller,
+                  sellerModeActive: user.sellerModeActive,
+                  ...data
+                });
+                
+                set({ 
+                  user: updatedUser, 
+                  isLoading: false,
+                  lastSyncTime: Date.now(),
+                });
+                return true;
+              }
+            } catch (createError: any) {
+              console.error('Error creating user document:', createError);
+              set({ 
+                isLoading: false, 
+                error: createError.message || 'Failed to update profile' 
+              });
+              return false;
+            }
+          }
           
           set({ 
             isLoading: false, 
@@ -232,28 +299,70 @@ export const useAuthStore = create<AuthState>()(
             throw new Error('User not authenticated');
           }
           
-          // Simulate network delay
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          // Update user to seller
-          const updatedUser = { 
-            ...user, 
-            isSeller: true, 
-            sellerModeActive: true 
-          };
-          
-          // Update in mock database if user exists
-          if (user.email && mockUsers[user.email]) {
-            mockUsers[user.email].user = updatedUser;
+          // If offline, queue the action
+          if (!isOnline() || state.isOfflineMode) {
+            const pendingAction = {
+              type: 'upgrade_to_seller' as const,
+              data: {},
+              timestamp: Date.now(),
+            };
+            
+            // Update local user data
+            const updatedUser = { 
+              ...user, 
+              isSeller: true, 
+              sellerModeActive: true 
+            };
+            
+            set({ 
+              user: updatedUser,
+              pendingAuthActions: [...state.pendingAuthActions, pendingAction],
+              isLoading: false 
+            });
+            return true;
           }
           
+          const updatedUser = await FirebaseAuth.upgradeToSeller(user.id);
+          updatedUser.sellerModeActive = true;
           set({ 
             user: updatedUser, 
             isLoading: false,
+            lastSyncTime: Date.now(),
           });
           return true;
         } catch (error: any) {
           console.error('Upgrade to seller error in store:', error);
+          
+          // If it's a "document not found" error, try to create the user document first
+          if (error.message.includes('No document to update') || error.message.includes('not-found')) {
+            try {
+              const { user } = state;
+              if (user) {
+                // Create the user document with seller status
+                const updatedUser = await FirebaseAuth.updateUserProfile(user.id, {
+                  name: user.name,
+                  email: user.email,
+                  photoURL: user.photoURL,
+                  isSeller: true,
+                  sellerModeActive: true,
+                });
+                
+                set({ 
+                  user: updatedUser, 
+                  isLoading: false,
+                  lastSyncTime: Date.now(),
+                });
+                return true;
+              }
+            } catch (createError: any) {
+              console.error('Error creating seller document:', createError);
+              set({ 
+                isLoading: false, 
+                error: createError.message || 'Failed to upgrade to seller' 
+              });
+              return false;
+            }
+          }
           
           set({ 
             isLoading: false, 
@@ -273,23 +382,28 @@ export const useAuthStore = create<AuthState>()(
             throw new Error('User is not a seller');
           }
           
-          // Simulate network delay
-          await new Promise(resolve => setTimeout(resolve, 500));
-          
           const updatedUser = { 
             ...user, 
             sellerModeActive: !user.sellerModeActive 
           };
           
-          // Update in mock database if user exists
-          if (user.email && mockUsers[user.email]) {
-            mockUsers[user.email].user = updatedUser;
+          // If online, update in Firebase
+          if (isOnline() && !state.isOfflineMode) {
+            await FirebaseAuth.updateUserProfile(user.id, { 
+              sellerModeActive: updatedUser.sellerModeActive 
+            });
+            set({ 
+              user: updatedUser, 
+              isLoading: false,
+              lastSyncTime: Date.now(),
+            });
+          } else {
+            // If offline, just update locally
+            set({ user: updatedUser, isLoading: false });
           }
           
-          set({ user: updatedUser, isLoading: false });
           return true;
         } catch (error: any) {
-          console.error('Toggle seller mode error in store:', error);
           set({ 
             isLoading: false, 
             error: error.message || 'Failed to toggle seller mode' 
@@ -318,18 +432,44 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          // Simulate network delay
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // If offline, use cached user data
+          if (!isOnline()) {
+            const state = get();
+            if (state.user && !state.isGuest) {
+              set({ isLoading: false });
+              return true;
+            } else {
+              set({ 
+                user: null, 
+                isAuthenticated: false, 
+                isLoading: false,
+                isGuest: false,
+                hasSelectedRole: false
+              });
+              return false;
+            }
+          }
           
-          const state = get();
-          if (state.user && !state.isGuest) {
-            set({ isLoading: false });
+          const user = await FirebaseAuth.getCurrentUser();
+          if (user) {
+            // Ensure sellerModeActive is set if the user is a seller
+            if (user.isSeller && user.sellerModeActive === undefined) {
+              user.sellerModeActive = false;
+            }
+            set({ 
+              user, 
+              isAuthenticated: true, 
+              isLoading: false, 
+              isGuest: false,
+              hasSelectedRole: get().hasSelectedRole || false,
+              lastSyncTime: Date.now(),
+            });
             return true;
           } else {
             set({ 
               user: null, 
               isAuthenticated: false, 
-              isLoading: false,
+              isLoading: false, 
               isGuest: false,
               hasSelectedRole: false
             });
@@ -353,6 +493,72 @@ export const useAuthStore = create<AuthState>()(
         set({ hasSelectedRole: value });
       },
       
+      // Offline management
+      enableOfflineMode: () => {
+        set({ isOfflineMode: true });
+      },
+      
+      enableOnlineMode: async () => {
+        set({ isOfflineMode: false });
+        
+        // Sync pending actions when coming back online
+        if (isOnline()) {
+          await get().syncOfflineAuthData();
+        }
+      },
+      
+      syncOfflineAuthData: async () => {
+        const state = get();
+        
+        if (!isOnline() || state.pendingAuthActions.length === 0) {
+          return;
+        }
+        
+        set({ isLoading: true, error: null });
+        
+        try {
+          const { user } = state;
+          if (!user || user.id === 'guest') {
+            set({ pendingAuthActions: [], isLoading: false });
+            return;
+          }
+          
+          // Process pending actions
+          for (const action of state.pendingAuthActions) {
+            try {
+              switch (action.type) {
+                case 'update_profile':
+                  await FirebaseAuth.updateUserProfile(user.id, action.data);
+                  break;
+                case 'upgrade_to_seller':
+                  await FirebaseAuth.upgradeToSeller(user.id);
+                  break;
+              }
+            } catch (error) {
+              console.error('Error syncing auth action:', action.type, error);
+              // Continue with other actions
+            }
+          }
+          
+          // Clear pending actions and refresh user data
+          set({ 
+            pendingAuthActions: [], 
+            isLoading: false,
+            lastSyncTime: Date.now(),
+          });
+          
+          // Refresh user data
+          await get().checkAuth();
+          
+        } catch (error: any) {
+          console.error('Error syncing offline auth data:', error);
+          set({ 
+            isLoading: false, 
+            error: error.message || 'Failed to sync offline data' 
+          });
+        }
+      },
+      
       clearError: () => {
         set({ error: null });
       },
@@ -365,6 +571,8 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: state.isAuthenticated,
         isGuest: state.isGuest,
         hasSelectedRole: state.hasSelectedRole,
+        lastSyncTime: state.lastSyncTime,
+        pendingAuthActions: state.pendingAuthActions,
       }),
     }
   )

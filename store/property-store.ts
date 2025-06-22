@@ -2,12 +2,13 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Property, PropertyFilter } from '@/types/property';
+import * as FirebaseProperties from '@/firebase/properties';
+import { Platform } from 'react-native';
 
-interface PendingUpload {
-  id: string;
-  type: 'property' | '3d-tour' | '3d-model';
-  data: any;
-  timestamp: Date;
+interface OfflineData {
+  properties: Property[];
+  lastSync: number;
+  isOfflineMode: boolean;
 }
 
 interface PropertyState {
@@ -17,8 +18,22 @@ interface PropertyState {
   filter: PropertyFilter;
   isLoading: boolean;
   error: string | null;
+  
+  // Offline capabilities
+  offlineData: OfflineData;
   isOfflineMode: boolean;
-  pendingUploads: PendingUpload[];
+  lastSyncTime: number;
+  pendingUploads: Array<{
+    id: string;
+    type: 'add' | 'update' | 'delete';
+    data: any;
+    timestamp: number;
+  }>;
+  
+  // Performance optimization
+  imageCache: Map<string, string>;
+  compressionLevel: 'low' | 'medium' | 'high';
+  adaptiveLoading: boolean;
   
   // Actions
   toggleFavorite: (id: string) => void;
@@ -28,13 +43,7 @@ interface PropertyState {
   getFilteredProperties: () => Property[];
   isFavorite: (id: string) => boolean;
   
-  // Offline mode actions
-  setOfflineMode: (isOffline: boolean) => void;
-  addPendingUpload: (upload: Omit<PendingUpload, 'id' | 'timestamp'>) => void;
-  removePendingUpload: (id: string) => void;
-  clearPendingUploads: () => void;
-  
-  // Local property management
+  // Firebase actions with offline support
   fetchProperties: (forceRefresh?: boolean) => Promise<void>;
   fetchSellerProperties: (sellerId: string) => Promise<Property[]>;
   addProperty: (property: Omit<Property, 'id'>, images: string[]) => Promise<Property>;
@@ -42,93 +51,72 @@ interface PropertyState {
   deleteProperty: (id: string) => Promise<boolean>;
   getPropertyById: (id: string) => Promise<Property | null>;
   
+  // Offline management
+  enableOfflineMode: () => Promise<void>;
+  enableOnlineMode: () => Promise<void>;
+  syncOfflineData: () => Promise<void>;
+  clearOfflineData: () => void;
+  
+  // Performance optimization
+  setCompressionLevel: (level: 'low' | 'medium' | 'high') => void;
+  toggleAdaptiveLoading: () => void;
+  preloadImages: (properties: Property[]) => Promise<void>;
+  clearImageCache: () => void;
+  
   clearError: () => void;
 }
 
-// Mock properties database
-let mockProperties: Property[] = [
-  {
-    id: '1',
-    sellerId: 'seller1',
-    title: 'Modern Downtown Apartment',
-    description: 'Beautiful modern apartment in the heart of downtown with stunning city views.',
-    address: '123 Main Street',
-    city: 'New York',
-    state: 'NY',
-    price: 850000,
-    beds: 2,
-    baths: 2,
-    sqm: 95,
-    type: 'apartment',
-    status: 'for_sale',
-    images: [
-      'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800',
-      'https://images.unsplash.com/photo-1484154218962-a197022b5858?w=800',
-      'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800'
-    ],
-    features: ['Balcony', 'Gym', 'Parking', 'Elevator'],
-    has3DTour: true,
-    has3DModel: false,
-    createdAt: new Date('2024-01-15'),
-    updatedAt: new Date('2024-01-15'),
-  },
-  {
-    id: '2',
-    sellerId: 'seller2',
-    title: 'Cozy Suburban House',
-    description: 'Perfect family home with a large backyard and quiet neighborhood.',
-    address: '456 Oak Avenue',
-    city: 'Los Angeles',
-    state: 'CA',
-    price: 1200000,
-    beds: 4,
-    baths: 3,
-    sqm: 180,
-    type: 'house',
-    status: 'for_sale',
-    images: [
-      'https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=800',
-      'https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=800',
-      'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800'
-    ],
-    features: ['Garden', 'Garage', 'Fireplace', 'Pool'],
-    has3DTour: false,
-    has3DModel: true,
-    createdAt: new Date('2024-01-10'),
-    updatedAt: new Date('2024-01-10'),
-  },
-  {
-    id: '3',
-    sellerId: 'seller1',
-    title: 'Luxury Penthouse',
-    description: 'Exclusive penthouse with panoramic views and premium amenities.',
-    address: '789 Sky Tower',
-    city: 'Miami',
-    state: 'FL',
-    price: 2500000,
-    beds: 3,
-    baths: 3,
-    sqm: 220,
-    type: 'apartment',
-    status: 'for_sale',
-    images: [
-      'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800',
-      'https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=800',
-      'https://images.unsplash.com/photo-1505843513577-22bb7d21e455?w=800'
-    ],
-    features: ['Rooftop Terrace', 'Concierge', 'Spa', 'Wine Cellar'],
-    has3DTour: true,
-    has3DModel: true,
-    createdAt: new Date('2024-01-05'),
-    updatedAt: new Date('2024-01-05'),
+// Compression utilities
+const compressPropertyData = (property: Property, level: 'low' | 'medium' | 'high'): Property => {
+  const compressed = { ...property };
+  
+  switch (level) {
+    case 'low':
+      // Keep only essential data
+      return {
+        id: compressed.id,
+        sellerId: compressed.sellerId,
+        title: compressed.title,
+        address: compressed.address,
+        city: compressed.city,
+        state: compressed.state,
+        price: compressed.price,
+        beds: compressed.beds,
+        baths: compressed.baths,
+        sqm: compressed.sqm,
+        type: compressed.type,
+        status: compressed.status,
+        images: compressed.images.slice(0, 3), // Limit to 3 images
+        has3DTour: compressed.has3DTour,
+        has3DModel: compressed.has3DModel,
+      } as Property;
+      
+    case 'medium':
+      // Include more data but compress arrays
+      return {
+        ...compressed,
+        images: compressed.images.slice(0, 5), // Limit to 5 images
+        features: compressed.features?.slice(0, 5) || [], // Limit features
+        description: compressed.description?.substring(0, 200) || '', // Truncate description
+      };
+      
+    case 'high':
+      // Keep all data
+      return compressed;
+      
+    default:
+      return compressed;
   }
-];
+};
 
-// Helper to generate property ID
-const generatePropertyId = () => `prop_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-// Helper to generate upload ID
-const generateUploadId = () => `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+// Network detection
+const isOnline = (): boolean => {
+  if (Platform.OS === 'web') {
+    return navigator.onLine;
+  }
+  // For native platforms, assume online unless explicitly set offline
+  return true;
+};
 
 export const usePropertyStore = create<PropertyState>()(
   persist(
@@ -139,8 +127,21 @@ export const usePropertyStore = create<PropertyState>()(
       filter: {},
       isLoading: false,
       error: null,
+      
+      // Offline state
+      offlineData: {
+        properties: [],
+        lastSync: 0,
+        isOfflineMode: false,
+      },
       isOfflineMode: false,
+      lastSyncTime: 0,
       pendingUploads: [],
+      
+      // Performance state
+      imageCache: new Map(),
+      compressionLevel: 'medium',
+      adaptiveLoading: true,
 
       toggleFavorite: (id: string) => {
         set((state) => {
@@ -173,9 +174,9 @@ export const usePropertyStore = create<PropertyState>()(
       },
 
       getFilteredProperties: () => {
-        const { properties, filter } = get();
+        const { properties, filter, compressionLevel } = get();
         
-        return properties.filter((property) => {
+        let filteredProperties = properties.filter((property) => {
           // Price filter
           if (filter.priceMin && property.price < filter.priceMin) return false;
           if (filter.priceMax && property.price > filter.priceMax) return false;
@@ -200,87 +201,111 @@ export const usePropertyStore = create<PropertyState>()(
           
           return true;
         });
+        
+        // Apply compression based on current level
+        return filteredProperties.map(property => 
+          compressPropertyData(property, compressionLevel)
+        );
       },
 
       isFavorite: (id: string) => {
         return get().favoriteIds.includes(id);
       },
 
-      setOfflineMode: (isOffline: boolean) => {
-        set({ isOfflineMode: isOffline });
-      },
-
-      addPendingUpload: (upload: Omit<PendingUpload, 'id' | 'timestamp'>) => {
-        set((state) => ({
-          pendingUploads: [
-            ...state.pendingUploads,
-            {
-              ...upload,
-              id: generateUploadId(),
-              timestamp: new Date(),
-            },
-          ],
-        }));
-      },
-
-      removePendingUpload: (id: string) => {
-        set((state) => ({
-          pendingUploads: state.pendingUploads.filter((upload) => upload.id !== id),
-        }));
-      },
-
-      clearPendingUploads: () => {
-        set({ pendingUploads: [] });
-      },
-
       clearError: () => {
         set({ error: null });
       },
       
+      // Enhanced Firebase actions with offline support
       fetchProperties: async (forceRefresh = false) => {
+        const state = get();
+        
+        // If offline mode and we have cached data, use it
+        if (state.isOfflineMode && state.offlineData.properties.length > 0 && !forceRefresh) {
+          set({ 
+            properties: state.offlineData.properties,
+            isLoading: false 
+          });
+          return;
+        }
+        
+        // Check if we should use cached data based on last sync time
+        const now = Date.now();
+        const cacheValidTime = 5 * 60 * 1000; // 5 minutes
+        
+        if (!forceRefresh && 
+            state.offlineData.properties.length > 0 && 
+            (now - state.lastSyncTime) < cacheValidTime) {
+          set({ 
+            properties: state.offlineData.properties,
+            isLoading: false 
+          });
+          return;
+        }
+        
         set({ isLoading: true, error: null });
         
         try {
-          // Simulate network delay
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Check network connectivity
+          if (!isOnline()) {
+            throw new Error('No internet connection');
+          }
           
-          // Sort by creation date, newest first
-          const sortedProperties = [...mockProperties].sort((a, b) => {
-            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return dateB - dateA;
-          });
+          const properties = await FirebaseProperties.getProperties();
+          
+          // Apply compression based on current level
+          const compressedProperties = properties.map(property => 
+            compressPropertyData(property, state.compressionLevel)
+          );
           
           set({ 
-            properties: sortedProperties,
+            properties: compressedProperties,
+            offlineData: {
+              properties: compressedProperties,
+              lastSync: now,
+              isOfflineMode: false,
+            },
+            lastSyncTime: now,
             isLoading: false 
           });
           
+          // Preload images if adaptive loading is enabled
+          if (state.adaptiveLoading) {
+            get().preloadImages(compressedProperties.slice(0, 10)); // Preload first 10
+          }
+          
         } catch (error: any) {
           console.error('Error fetching properties:', error);
-          set({ 
-            isLoading: false, 
-            error: error.message || 'Failed to fetch properties' 
-          });
+          
+          // If we have offline data, use it
+          if (state.offlineData.properties.length > 0) {
+            set({ 
+              properties: state.offlineData.properties,
+              isLoading: false,
+              error: 'Using offline data - ' + (error.message || 'Network error')
+            });
+          } else {
+            set({ 
+              isLoading: false, 
+              error: error.message || 'Failed to fetch properties' 
+            });
+          }
         }
       },
       
       fetchSellerProperties: async (sellerId: string) => {
         set({ isLoading: true, error: null });
         try {
-          // Simulate network delay
-          await new Promise(resolve => setTimeout(resolve, 500));
+          const properties = await FirebaseProperties.getSellerProperties(sellerId);
+          const state = get();
           
-          const sellerProperties = mockProperties
-            .filter(property => property.sellerId === sellerId)
-            .sort((a, b) => {
-              const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-              const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-              return dateB - dateA;
-            });
+          // Apply compression
+          const compressedProperties = properties.map(property => 
+            compressPropertyData(property, state.compressionLevel)
+          );
           
           set({ isLoading: false });
-          return sellerProperties;
+          return compressedProperties;
         } catch (error: any) {
           console.error('Error fetching seller properties:', error);
           set({ 
@@ -292,29 +317,56 @@ export const usePropertyStore = create<PropertyState>()(
       },
       
       addProperty: async (property: Omit<Property, 'id'>, images: string[]) => {
+        const state = get();
         set({ isLoading: true, error: null });
         
         try {
-          // Simulate network delay
-          await new Promise(resolve => setTimeout(resolve, 1500));
+          // If offline, queue for later upload
+          if (!isOnline() || state.isOfflineMode) {
+            const tempId = `temp_${Date.now()}`;
+            const tempProperty = {
+              id: tempId,
+              ...property,
+              images: images,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            } as Property;
+            
+            // Add to pending uploads
+            const pendingUpload = {
+              id: tempId,
+              type: 'add' as const,
+              data: { property, images },
+              timestamp: Date.now(),
+            };
+            
+            set((state) => ({
+              properties: [...state.properties, tempProperty],
+              pendingUploads: [...state.pendingUploads, pendingUpload],
+              isLoading: false
+            }));
+            
+            return tempProperty;
+          }
           
-          const newProperty: Property = {
-            id: generatePropertyId(),
-            ...property,
-            images: images,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
+          // Online - upload with progress tracking
+          const newProperty = await FirebaseProperties.addProperty(
+            property, 
+            images,
+            (progress) => {
+              // Could emit progress events here
+              console.log('Upload progress:', progress);
+            }
+          );
           
-          // Add to mock database
-          mockProperties.push(newProperty);
+          const compressedProperty = compressPropertyData(newProperty, state.compressionLevel);
           
           set((state) => ({ 
-            properties: [...state.properties, newProperty],
+            properties: [...state.properties, compressedProperty],
             isLoading: false 
           }));
           
-          return newProperty;
+          return compressedProperty;
         } catch (error: any) {
           console.error('Error adding property:', error);
           set({ 
@@ -326,35 +378,51 @@ export const usePropertyStore = create<PropertyState>()(
       },
       
       updateProperty: async (id: string, property: Partial<Property>, newImages?: string[]) => {
+        const state = get();
         set({ isLoading: true, error: null });
         
         try {
-          // Simulate network delay
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          // Find and update property in mock database
-          const propertyIndex = mockProperties.findIndex(p => p.id === id);
-          if (propertyIndex === -1) {
-            throw new Error('Property not found');
+          // If offline, queue for later upload
+          if (!isOnline() || state.isOfflineMode) {
+            const pendingUpload = {
+              id,
+              type: 'update' as const,
+              data: { property, newImages },
+              timestamp: Date.now(),
+            };
+            
+            // Update local copy
+            set((state) => ({
+              properties: state.properties.map(p => 
+                p.id === id ? { ...p, ...property, updatedAt: new Date() } : p
+              ),
+              pendingUploads: [...state.pendingUploads, pendingUpload],
+              isLoading: false
+            }));
+            
+            return { id, ...property } as Property;
           }
           
-          const updatedProperty = {
-            ...mockProperties[propertyIndex],
-            ...property,
-            images: newImages || mockProperties[propertyIndex].images,
-            updatedAt: new Date(),
-          };
+          // Online - upload with progress tracking
+          const updatedProperty = await FirebaseProperties.updateProperty(
+            id, 
+            property, 
+            newImages,
+            (progress) => {
+              console.log('Update progress:', progress);
+            }
+          );
           
-          mockProperties[propertyIndex] = updatedProperty;
+          const compressedProperty = compressPropertyData(updatedProperty, state.compressionLevel);
           
           set((state) => ({ 
             properties: state.properties.map(p => 
-              p.id === id ? updatedProperty : p
+              p.id === id ? compressedProperty : p
             ),
             isLoading: false 
           }));
           
-          return updatedProperty;
+          return compressedProperty;
         } catch (error: any) {
           console.error('Error updating property:', error);
           set({ 
@@ -366,14 +434,31 @@ export const usePropertyStore = create<PropertyState>()(
       },
       
       deleteProperty: async (id: string) => {
+        const state = get();
         set({ isLoading: true, error: null });
         
         try {
-          // Simulate network delay
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // If offline, queue for later deletion
+          if (!isOnline() || state.isOfflineMode) {
+            const pendingUpload = {
+              id,
+              type: 'delete' as const,
+              data: {},
+              timestamp: Date.now(),
+            };
+            
+            set((state) => ({
+              properties: state.properties.filter(p => p.id !== id),
+              favoriteIds: state.favoriteIds.filter(favId => favId !== id),
+              recentlyViewed: state.recentlyViewed.filter(viewedId => viewedId !== id),
+              pendingUploads: [...state.pendingUploads, pendingUpload],
+              isLoading: false
+            }));
+            
+            return true;
+          }
           
-          // Remove from mock database
-          mockProperties = mockProperties.filter(p => p.id !== id);
+          await FirebaseProperties.deleteProperty(id);
           
           set((state) => ({ 
             properties: state.properties.filter(p => p.id !== id),
@@ -394,16 +479,171 @@ export const usePropertyStore = create<PropertyState>()(
       },
 
       getPropertyById: async (id: string) => {
+        const state = get();
+        
+        // First check local cache
+        const localProperty = state.properties.find(p => p.id === id);
+        if (localProperty) {
+          return localProperty;
+        }
+        
+        // Check offline data
+        const offlineProperty = state.offlineData.properties.find(p => p.id === id);
+        if (offlineProperty && (!isOnline() || state.isOfflineMode)) {
+          return offlineProperty;
+        }
+        
+        // Fetch from Firebase if online
         try {
-          // Simulate network delay
-          await new Promise(resolve => setTimeout(resolve, 300));
+          if (!isOnline()) {
+            throw new Error('Property not available offline');
+          }
           
-          const property = mockProperties.find(p => p.id === id);
-          return property || null;
+          const property = await FirebaseProperties.getPropertyById(id);
+          if (property) {
+            const compressedProperty = compressPropertyData(property, state.compressionLevel);
+            
+            // Update local cache
+            set((state) => ({
+              properties: state.properties.some(p => p.id === id) 
+                ? state.properties.map(p => p.id === id ? compressedProperty : p)
+                : [...state.properties, compressedProperty]
+            }));
+            
+            return compressedProperty;
+          }
+          return null;
         } catch (error: any) {
           console.error('Error getting property by ID:', error);
           return null;
         }
+      },
+      
+      // Offline management
+      enableOfflineMode: async () => {
+        try {
+          await FirebaseProperties.enableOfflineMode();
+          set({ isOfflineMode: true });
+        } catch (error) {
+          console.error('Error enabling offline mode:', error);
+        }
+      },
+      
+      enableOnlineMode: async () => {
+        try {
+          await FirebaseProperties.enableOnlineMode();
+          set({ isOfflineMode: false });
+          
+          // Sync pending uploads
+          await get().syncOfflineData();
+        } catch (error) {
+          console.error('Error enabling online mode:', error);
+        }
+      },
+      
+      syncOfflineData: async () => {
+        const state = get();
+        
+        if (!isOnline() || state.pendingUploads.length === 0) {
+          return;
+        }
+        
+        set({ isLoading: true, error: null });
+        
+        try {
+          // Process pending uploads
+          for (const upload of state.pendingUploads) {
+            try {
+              switch (upload.type) {
+                case 'add':
+                  await FirebaseProperties.addProperty(upload.data.property, upload.data.images);
+                  break;
+                case 'update':
+                  await FirebaseProperties.updateProperty(upload.id, upload.data.property, upload.data.newImages);
+                  break;
+                case 'delete':
+                  await FirebaseProperties.deleteProperty(upload.id);
+                  break;
+              }
+            } catch (error) {
+              console.error('Error syncing upload:', upload.id, error);
+              // Continue with other uploads
+            }
+          }
+          
+          // Clear pending uploads
+          set({ pendingUploads: [], isLoading: false });
+          
+          // Refresh data
+          await get().fetchProperties(true);
+          
+        } catch (error: any) {
+          console.error('Error syncing offline data:', error);
+          set({ 
+            isLoading: false, 
+            error: error.message || 'Failed to sync offline data' 
+          });
+        }
+      },
+      
+      clearOfflineData: () => {
+        set({
+          offlineData: {
+            properties: [],
+            lastSync: 0,
+            isOfflineMode: false,
+          },
+          pendingUploads: [],
+          lastSyncTime: 0,
+        });
+      },
+      
+      // Performance optimization
+      setCompressionLevel: (level: 'low' | 'medium' | 'high') => {
+        set({ compressionLevel: level });
+      },
+      
+      toggleAdaptiveLoading: () => {
+        set((state) => ({ adaptiveLoading: !state.adaptiveLoading }));
+      },
+      
+      preloadImages: async (properties: Property[]) => {
+        const state = get();
+        
+        if (!state.adaptiveLoading || !isOnline()) {
+          return;
+        }
+        
+        const imageUrls = properties
+          .flatMap(p => p.images || [])
+          .slice(0, 20); // Limit to 20 images
+        
+        const newCache = new Map(state.imageCache);
+        
+        for (const url of imageUrls) {
+          if (!newCache.has(url)) {
+            try {
+              if (Platform.OS === 'web') {
+                const img = new Image();
+                img.src = url;
+                await new Promise((resolve, reject) => {
+                  img.onload = resolve;
+                  img.onerror = reject;
+                  setTimeout(reject, 5000); // 5 second timeout
+                });
+                newCache.set(url, url);
+              }
+            } catch (error) {
+              console.warn('Failed to preload image:', url);
+            }
+          }
+        }
+        
+        set({ imageCache: newCache });
+      },
+      
+      clearImageCache: () => {
+        set({ imageCache: new Map() });
       },
     }),
     {
@@ -413,7 +653,11 @@ export const usePropertyStore = create<PropertyState>()(
         favoriteIds: state.favoriteIds,
         recentlyViewed: state.recentlyViewed,
         filter: state.filter,
+        offlineData: state.offlineData,
+        lastSyncTime: state.lastSyncTime,
         pendingUploads: state.pendingUploads,
+        compressionLevel: state.compressionLevel,
+        adaptiveLoading: state.adaptiveLoading,
       }),
     }
   )

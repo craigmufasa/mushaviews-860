@@ -5,6 +5,8 @@ import {
   Text,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, Link, useRouter } from 'expo-router';
@@ -15,7 +17,7 @@ import { AuthInput } from '@/components/AuthInput';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, isLoading, error: authError } = useAuthStore();
+  const { login, loginWithGoogle, isLoading, error: authError } = useAuthStore();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -64,10 +66,42 @@ export default function LoginScreen() {
         // Navigate to role selection instead of directly to tabs
         router.replace('/(auth)/role-selection');
       } else if (authError) {
-        setErrors({ ...errors, general: authError });
+        // Handle specific Firebase auth errors
+        if (authError.includes('user-not-found')) {
+          setErrors({ ...errors, email: 'No user found with this email' });
+        } else if (authError.includes('wrong-password')) {
+          setErrors({ ...errors, password: 'Incorrect password' });
+        } else if (authError.includes('too-many-requests')) {
+          setErrors({ ...errors, general: 'Too many failed login attempts. Please try again later.' });
+        } else {
+          setErrors({ ...errors, general: authError });
+        }
       }
     } catch (error) {
       console.error('Error signing in:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      setErrors({ ...errors, general: errorMessage });
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    if (Platform.OS !== 'web') {
+      Alert.alert('Not Available', 'Google sign-in is currently only available on web.');
+      return;
+    }
+    
+    setErrors({ email: '', password: '', general: '' });
+
+    try {
+      const success = await loginWithGoogle();
+      if (success) {
+        // Navigate to role selection instead of directly to tabs
+        router.replace('/(auth)/role-selection');
+      } else if (authError) {
+        setErrors({ ...errors, general: authError });
+      }
+    } catch (error) {
+      console.error('Error signing in with Google:', error);
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       setErrors({ ...errors, general: errorMessage });
     }
@@ -132,6 +166,24 @@ export default function LoginScreen() {
               </>
             )}
           </TouchableOpacity>
+          
+          {Platform.OS === 'web' && (
+            <>
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>OR</Text>
+                <View style={styles.dividerLine} />
+              </View>
+              
+              <TouchableOpacity 
+                style={styles.googleButton} 
+                onPress={handleGoogleLogin}
+                disabled={isLoading}
+              >
+                <Text style={styles.googleButtonText}>Sign in with Google</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
         
         <View style={styles.footer}>
@@ -204,6 +256,34 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    color: colors.textLight,
+    paddingHorizontal: 16,
+    fontSize: 14,
+  },
+  googleButton: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  googleButtonText: {
+    color: colors.text,
     fontSize: 16,
     fontWeight: '600',
   },

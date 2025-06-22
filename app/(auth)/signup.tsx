@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Mail, Lock, User } from 'lucide-react-native';
@@ -17,7 +18,7 @@ import { useAuthStore } from '@/store/auth-store';
 
 export default function SignupScreen() {
   const router = useRouter();
-  const { signup } = useAuthStore();
+  const { signup, loginWithGoogle } = useAuthStore();
   
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -31,6 +32,7 @@ export default function SignupScreen() {
     general?: string;
   }>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const validateForm = () => {
     const newErrors: {
@@ -85,11 +87,43 @@ export default function SignupScreen() {
       }
     } catch (error: any) {
       console.error('Signup error:', error);
-      setErrors({
-        general: error.message || 'An error occurred during signup',
-      });
+      
+      // Handle specific Firebase auth errors
+      if (error.message?.includes('email-already-in-use')) {
+        setErrors({
+          email: 'This email is already in use',
+        });
+      } else {
+        setErrors({
+          general: error.message || 'An error occurred during signup',
+        });
+      }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignup = async () => {
+    setIsGoogleLoading(true);
+    
+    try {
+      const success = await loginWithGoogle();
+      
+      if (success) {
+        // Redirect to role selection after successful login
+        router.replace('/role-selection');
+      } else {
+        setErrors({
+          general: 'Google sign-in failed',
+        });
+      }
+    } catch (error: any) {
+      console.error('Google signup error:', error);
+      setErrors({
+        general: error.message || 'An error occurred during Google sign-in',
+      });
+    } finally {
+      setIsGoogleLoading(false);
     }
   };
 
@@ -172,6 +206,30 @@ export default function SignupScreen() {
               <Text style={styles.signupButtonText}>Create Account</Text>
             )}
           </TouchableOpacity>
+
+          <View style={styles.dividerContainer}>
+            <View style={styles.divider} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.divider} />
+          </View>
+
+          <TouchableOpacity 
+            style={[styles.googleButton, isGoogleLoading && styles.googleButtonDisabled]} 
+            onPress={handleGoogleSignup}
+            disabled={isGoogleLoading}
+          >
+            {isGoogleLoading ? (
+              <ActivityIndicator color={colors.text} />
+            ) : (
+              <>
+                <Image 
+                  source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg' }} 
+                  style={styles.googleIcon} 
+                />
+                <Text style={styles.googleButtonText}>Continue with Google</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
         
         <View style={styles.footer}>
@@ -238,6 +296,44 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    color: colors.textLight,
+    paddingHorizontal: 10,
+    fontSize: 14,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  googleButtonDisabled: {
+    opacity: 0.7,
+  },
+  googleIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 10,
+  },
+  googleButtonText: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '500',
   },
   footer: {
     flexDirection: 'row',
