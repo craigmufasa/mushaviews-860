@@ -1,10 +1,13 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, Firestore, enableNetwork, disableNetwork, connectFirestoreEmulator } from 'firebase/firestore';
-import { getStorage, FirebaseStorage, connectStorageEmulator } from 'firebase/storage';
-import { getAuth, Auth, GoogleAuthProvider, connectAuthEmulator } from 'firebase/auth';
 import { Platform } from 'react-native';
 
-// Your web app's Firebase configuration
+// For React Native, we use @react-native-firebase
+// For web, we use the web Firebase SDK
+let firebaseApp: any = null;
+let auth: any = null;
+let firestore: any = null;
+let storage: any = null;
+
+// Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyA4JfWvsw3cem_8XThLOXa76WqTNG2BapY",
   authDomain: "musha-views.firebaseapp.com",
@@ -15,125 +18,114 @@ const firebaseConfig = {
   measurementId: "G-RRFG7DKZVM"
 };
 
-// Initialize Firebase
-let app;
-let db: Firestore;
-let storage: FirebaseStorage;
-let auth: Auth;
-let googleProvider: GoogleAuthProvider;
+let isInitialized = false;
+let initializationPromise: Promise<void> | null = null;
 
-// Check if Firebase is already initialized
-if (getApps().length === 0) {
+const initializeFirebase = async (): Promise<void> => {
+  if (isInitialized) {
+    return;
+  }
+
   try {
-    app = initializeApp(firebaseConfig);
-    console.log('Firebase app initialized successfully');
-    
-    // Initialize services in the correct order
-    auth = getAuth(app);
-    db = getFirestore(app);
-    storage = getStorage(app);
-    googleProvider = new GoogleAuthProvider();
-    
-    console.log('Firebase Auth initialized');
-    console.log('Firestore initialized');
-    console.log('Firebase Storage initialized');
-    
-    // Only add scopes on web platform to avoid issues on native
+    console.log('Initializing Firebase for platform:', Platform.OS);
+
     if (Platform.OS === 'web') {
-      googleProvider.addScope('profile');
-      googleProvider.addScope('email');
+      // Web Firebase SDK
+      const { initializeApp, getApps, getApp } = await import('firebase/app');
+      const { getAuth } = await import('firebase/auth');
+      const { getFirestore } = await import('firebase/firestore');
+      const { getStorage } = await import('firebase/storage');
+
+      if (getApps().length === 0) {
+        firebaseApp = initializeApp(firebaseConfig);
+      } else {
+        firebaseApp = getApp();
+      }
+
+      auth = getAuth(firebaseApp);
+      firestore = getFirestore(firebaseApp);
+      storage = getStorage(firebaseApp);
+    } else {
+      // React Native Firebase
+      const rnFirebaseApp = await import('@react-native-firebase/app');
+      const rnAuth = await import('@react-native-firebase/auth');
+      const rnFirestore = await import('@react-native-firebase/firestore');
+      const rnStorage = await import('@react-native-firebase/storage');
+
+      // Check if Firebase is already initialized
+      if (rnFirebaseApp.default().apps.length === 0) {
+        firebaseApp = await rnFirebaseApp.default().initializeApp(firebaseConfig);
+      } else {
+        firebaseApp = rnFirebaseApp.default();
+      }
+
+      auth = rnAuth.default();
+      firestore = rnFirestore.default();
+      storage = rnStorage.default();
     }
-    
-    // Enable offline persistence for Firestore
-    if (Platform.OS === 'web') {
-      // Web offline persistence is enabled by default in v9
-      console.log('Firebase initialized with offline persistence');
-    }
-    
-    // Development mode emulator connections (uncomment for local development)
-    // if (__DEV__ && Platform.OS === 'web') {
-    //   try {
-    //     connectAuthEmulator(auth, 'http://localhost:9099');
-    //     connectFirestoreEmulator(db, 'localhost', 8080);
-    //     connectStorageEmulator(storage, 'localhost', 9199);
-    //     console.log('Connected to Firebase emulators');
-    //   } catch (error) {
-    //     console.warn('Failed to connect to emulators:', error);
-    //   }
-    // }
-    
+
+    isInitialized = true;
+    console.log('Firebase initialized successfully for', Platform.OS);
   } catch (error) {
     console.error('Error initializing Firebase:', error);
-    // Provide fallbacks to prevent crashes
-    db = {} as Firestore;
-    storage = {} as FirebaseStorage;
-    auth = {} as Auth;
-    googleProvider = {} as GoogleAuthProvider;
-  }
-} else {
-  app = getApp();
-  auth = getAuth(app);
-  db = getFirestore(app);
-  storage = getStorage(app);
-  googleProvider = new GoogleAuthProvider();
-  
-  // Only add scopes on web platform
-  if (Platform.OS === 'web') {
-    googleProvider.addScope('profile');
-    googleProvider.addScope('email');
-  }
-}
-
-// Enhanced offline management functions
-export const enableOfflineMode = async (): Promise<void> => {
-  try {
-    if (db && Platform.OS === 'web') {
-      await disableNetwork(db);
-      console.log('Offline mode enabled');
-    }
-  } catch (error) {
-    console.warn('Error enabling offline mode:', error);
+    isInitialized = false;
+    throw error;
   }
 };
 
-export const enableOnlineMode = async (): Promise<void> => {
-  try {
-    if (db && Platform.OS === 'web') {
-      await enableNetwork(db);
-      console.log('Online mode enabled');
-    }
-  } catch (error) {
-    console.warn('Error enabling online mode:', error);
+export const getFirebaseInitialization = (): Promise<void> => {
+  if (!initializationPromise) {
+    initializationPromise = initializeFirebase();
   }
+  return initializationPromise;
 };
 
-// Network status monitoring
-export const isNetworkAvailable = (): boolean => {
-  if (Platform.OS === 'web') {
-    return navigator.onLine;
+export const getFirebaseApp = async () => {
+  await getFirebaseInitialization();
+  if (!firebaseApp) {
+    throw new Error('Firebase app not initialized');
   }
-  // For native platforms, you might want to use @react-native-community/netinfo
-  return true;
+  return firebaseApp;
 };
 
-// Storage configuration for better performance
-if (storage && Platform.OS === 'web') {
-  // Configure storage for better performance
-  storage.maxUploadRetryTime = 60000; // 60 seconds
-  storage.maxOperationRetryTime = 120000; // 2 minutes
-}
+export const getFirebaseAuth = async () => {
+  await getFirebaseInitialization();
+  if (!auth) {
+    throw new Error('Firebase Auth not initialized');
+  }
+  return auth;
+};
 
-// Export the Firebase instances
-export { app, db, storage, auth, googleProvider };
+export const getFirebaseDb = async () => {
+  await getFirebaseInitialization();
+  if (!firestore) {
+    throw new Error('Firestore not initialized');
+  }
+  return firestore;
+};
 
-// Export a flag for demo mode - set to false to use real Firebase
+export const getFirebaseStorage = async () => {
+  await getFirebaseInitialization();
+  if (!storage) {
+    throw new Error('Firebase Storage not initialized');
+  }
+  return storage;
+};
+
+export const isFirebaseInitialized = (): boolean => {
+  return isInitialized;
+};
+
 export const isDemoMode = false;
 
-// Export configuration for debugging
 export const getFirebaseConfig = () => ({
   projectId: firebaseConfig.projectId,
   authDomain: firebaseConfig.authDomain,
   storageBucket: firebaseConfig.storageBucket,
   isOfflineEnabled: true,
   platform: Platform.OS,
+  isInitialized,
 });
+
+// Legacy exports for backward compatibility
+export { firebaseApp as app, firestore as db, storage, auth };

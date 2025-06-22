@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, UserRole } from '@/types/user';
 import * as FirebaseAuth from '@/firebase/auth';
+import { isFirebaseInitialized } from '@/firebase/config';
 import { Platform } from 'react-native';
 
 interface AuthState {
@@ -52,6 +53,17 @@ const isOnline = (): boolean => {
   return true; // Assume online for native unless explicitly set
 };
 
+// Helper to check if Firebase is ready
+const waitForFirebase = async (maxWaitTime = 10000): Promise<boolean> => {
+  const startTime = Date.now();
+  
+  while (!isFirebaseInitialized() && (Date.now() - startTime) < maxWaitTime) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  
+  return isFirebaseInitialized();
+};
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -84,6 +96,12 @@ export const useAuthStore = create<AuthState>()(
             throw new Error('Cannot login while offline. Please check your internet connection.');
           }
           
+          // Wait for Firebase to be ready
+          const firebaseReady = await waitForFirebase();
+          if (!firebaseReady) {
+            throw new Error('Firebase is not ready. Please try again.');
+          }
+          
           const user = await FirebaseAuth.signIn(email, password);
           set({ 
             user, 
@@ -95,6 +113,7 @@ export const useAuthStore = create<AuthState>()(
           });
           return true;
         } catch (error: any) {
+          console.error('Login error in store:', error);
           set({ 
             isLoading: false, 
             error: error.message || 'Failed to login' 
@@ -120,6 +139,12 @@ export const useAuthStore = create<AuthState>()(
             throw new Error('Cannot login while offline. Please check your internet connection.');
           }
           
+          // Wait for Firebase to be ready
+          const firebaseReady = await waitForFirebase();
+          if (!firebaseReady) {
+            throw new Error('Firebase is not ready. Please try again.');
+          }
+          
           const user = await FirebaseAuth.signInWithGoogle();
           set({ 
             user, 
@@ -131,6 +156,7 @@ export const useAuthStore = create<AuthState>()(
           });
           return true;
         } catch (error: any) {
+          console.error('Google login error in store:', error);
           set({ 
             isLoading: false, 
             error: error.message || 'Failed to login with Google' 
@@ -147,6 +173,12 @@ export const useAuthStore = create<AuthState>()(
             throw new Error('Cannot sign up while offline. Please check your internet connection.');
           }
           
+          // Wait for Firebase to be ready
+          const firebaseReady = await waitForFirebase();
+          if (!firebaseReady) {
+            throw new Error('Firebase is not ready. Please try again.');
+          }
+          
           const user = await FirebaseAuth.signUp(email, password, name);
           set({ 
             user, 
@@ -158,6 +190,7 @@ export const useAuthStore = create<AuthState>()(
           });
           return true;
         } catch (error: any) {
+          console.error('Signup error in store:', error);
           set({ 
             isLoading: false, 
             error: error.message || 'Failed to sign up' 
@@ -170,7 +203,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          if (isOnline()) {
+          if (isOnline() && isFirebaseInitialized()) {
             await FirebaseAuth.signOut();
           }
           
@@ -183,8 +216,15 @@ export const useAuthStore = create<AuthState>()(
             pendingAuthActions: [], // Clear pending actions on logout
           });
         } catch (error: any) {
+          console.error('Logout error in store:', error);
+          // Even if logout fails, clear local state
           set({ 
-            isLoading: false, 
+            user: null, 
+            isAuthenticated: false, 
+            isLoading: false,
+            isGuest: false,
+            hasSelectedRole: false,
+            pendingAuthActions: [],
             error: error.message || 'Failed to logout' 
           });
         }
@@ -198,10 +238,17 @@ export const useAuthStore = create<AuthState>()(
             throw new Error('Cannot reset password while offline. Please check your internet connection.');
           }
           
+          // Wait for Firebase to be ready
+          const firebaseReady = await waitForFirebase();
+          if (!firebaseReady) {
+            throw new Error('Firebase is not ready. Please try again.');
+          }
+          
           await FirebaseAuth.resetPassword(email);
           set({ isLoading: false });
           return true;
         } catch (error: any) {
+          console.error('Reset password error in store:', error);
           set({ 
             isLoading: false, 
             error: error.message || 'Failed to reset password' 
@@ -237,6 +284,12 @@ export const useAuthStore = create<AuthState>()(
               isLoading: false 
             });
             return true;
+          }
+          
+          // Wait for Firebase to be ready
+          const firebaseReady = await waitForFirebase();
+          if (!firebaseReady) {
+            throw new Error('Firebase is not ready. Please try again.');
           }
           
           const updatedUser = await FirebaseAuth.updateUserProfile(user.id, data);
@@ -322,6 +375,12 @@ export const useAuthStore = create<AuthState>()(
             return true;
           }
           
+          // Wait for Firebase to be ready
+          const firebaseReady = await waitForFirebase();
+          if (!firebaseReady) {
+            throw new Error('Firebase is not ready. Please try again.');
+          }
+          
           const updatedUser = await FirebaseAuth.upgradeToSeller(user.id);
           updatedUser.sellerModeActive = true;
           set({ 
@@ -387,8 +446,8 @@ export const useAuthStore = create<AuthState>()(
             sellerModeActive: !user.sellerModeActive 
           };
           
-          // If online, update in Firebase
-          if (isOnline() && !state.isOfflineMode) {
+          // If online and Firebase is ready, update in Firebase
+          if (isOnline() && !state.isOfflineMode && isFirebaseInitialized()) {
             await FirebaseAuth.updateUserProfile(user.id, { 
               sellerModeActive: updatedUser.sellerModeActive 
             });
@@ -404,6 +463,7 @@ export const useAuthStore = create<AuthState>()(
           
           return true;
         } catch (error: any) {
+          console.error('Toggle seller mode error in store:', error);
           set({ 
             isLoading: false, 
             error: error.message || 'Failed to toggle seller mode' 
@@ -450,6 +510,26 @@ export const useAuthStore = create<AuthState>()(
             }
           }
           
+          // Wait for Firebase to be ready
+          const firebaseReady = await waitForFirebase();
+          if (!firebaseReady) {
+            console.warn('Firebase not ready during auth check, using cached data');
+            const state = get();
+            if (state.user && !state.isGuest) {
+              set({ isLoading: false });
+              return true;
+            } else {
+              set({ 
+                user: null, 
+                isAuthenticated: false, 
+                isLoading: false,
+                isGuest: false,
+                hasSelectedRole: false
+              });
+              return false;
+            }
+          }
+          
           const user = await FirebaseAuth.getCurrentUser();
           if (user) {
             // Ensure sellerModeActive is set if the user is a seller
@@ -477,15 +557,22 @@ export const useAuthStore = create<AuthState>()(
           }
         } catch (error: any) {
           console.error('Check auth error:', error);
-          set({ 
-            user: null,
-            isAuthenticated: false,
-            isLoading: false, 
-            error: error.message || 'Failed to check authentication',
-            isGuest: false,
-            hasSelectedRole: false
-          });
-          return false;
+          // Don't fail completely, use cached data if available
+          const state = get();
+          if (state.user && !state.isGuest) {
+            set({ isLoading: false });
+            return true;
+          } else {
+            set({ 
+              user: null,
+              isAuthenticated: false,
+              isLoading: false, 
+              error: error.message || 'Failed to check authentication',
+              isGuest: false,
+              hasSelectedRole: false
+            });
+            return false;
+          }
         }
       },
       
@@ -511,6 +598,13 @@ export const useAuthStore = create<AuthState>()(
         const state = get();
         
         if (!isOnline() || state.pendingAuthActions.length === 0) {
+          return;
+        }
+        
+        // Wait for Firebase to be ready
+        const firebaseReady = await waitForFirebase();
+        if (!firebaseReady) {
+          console.warn('Firebase not ready for sync, will retry later');
           return;
         }
         

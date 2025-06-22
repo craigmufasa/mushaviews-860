@@ -1,29 +1,24 @@
-import { 
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  sendPasswordResetEmail,
-  updateProfile,
-  onAuthStateChanged,
-  GoogleAuthProvider,
-  signInWithPopup,
-  User as FirebaseUser
-} from 'firebase/auth';
-import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from './config';
-import { User } from '@/types/user';
 import { Platform } from 'react-native';
+import { getFirebaseAuth, getFirebaseDb } from './config';
+import { User } from '@/types/user';
 
 // Helper to convert Firebase user to our User type
-const convertFirebaseUser = async (firebaseUser: FirebaseUser): Promise<User> => {
-  if (!db) {
-    throw new Error('Firestore not initialized');
-  }
-
+const convertFirebaseUser = async (firebaseUser: any): Promise<User> => {
   try {
-    // Get additional user data from Firestore
-    const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-    const userData = userDoc.data();
+    const db = await getFirebaseDb();
+    
+    let userData: any = {};
+    
+    if (Platform.OS === 'web') {
+      // Web Firestore
+      const { doc, getDoc } = await import('firebase/firestore');
+      const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+      userData = userDoc.exists() ? userDoc.data() : {};
+    } else {
+      // React Native Firestore
+      const userDoc = await db.collection('users').doc(firebaseUser.uid).get();
+      userData = userDoc.exists ? userDoc.data() : {};
+    }
 
     return {
       id: firebaseUser.uid,
@@ -36,7 +31,6 @@ const convertFirebaseUser = async (firebaseUser: FirebaseUser): Promise<User> =>
     };
   } catch (error) {
     console.error('Error converting Firebase user:', error);
-    // Return basic user data if Firestore fails
     return {
       id: firebaseUser.uid,
       name: firebaseUser.displayName || 'User',
@@ -49,14 +43,18 @@ const convertFirebaseUser = async (firebaseUser: FirebaseUser): Promise<User> =>
   }
 };
 
-// Sign in with email and password
 export const signIn = async (email: string, password: string): Promise<User> => {
-  if (!auth) {
-    throw new Error('Firebase Auth not initialized');
-  }
-
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const auth = await getFirebaseAuth();
+    let userCredential: any;
+
+    if (Platform.OS === 'web') {
+      const { signInWithEmailAndPassword } = await import('firebase/auth');
+      userCredential = await signInWithEmailAndPassword(auth, email, password);
+    } else {
+      userCredential = await auth.signInWithEmailAndPassword(email, password);
+    }
+
     return await convertFirebaseUser(userCredential.user);
   } catch (error: any) {
     console.error('Sign in error:', error);
@@ -64,25 +62,27 @@ export const signIn = async (email: string, password: string): Promise<User> => 
   }
 };
 
-// Sign in with Google
 export const signInWithGoogle = async (): Promise<User> => {
-  if (!auth) {
-    throw new Error('Firebase Auth not initialized');
-  }
-
   if (Platform.OS !== 'web') {
     throw new Error('Google sign-in is currently only available on web');
   }
 
   try {
-    const provider = new GoogleAuthProvider();
-    const userCredential = await signInWithPopup(auth, provider);
+    const auth = await getFirebaseAuth();
+    const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
     
-    // Check if this is a new user and create profile
+    const provider = new GoogleAuthProvider();
+    provider.addScope('profile');
+    provider.addScope('email');
+    
+    const userCredential = await signInWithPopup(auth, provider);
     const user = await convertFirebaseUser(userCredential.user);
     
     // Create user document if it doesn't exist
-    if (db) {
+    try {
+      const db = await getFirebaseDb();
+      const { doc, getDoc, setDoc, serverTimestamp } = await import('firebase/firestore');
+      
       const userDoc = await getDoc(doc(db, 'users', user.id));
       if (!userDoc.exists()) {
         await setDoc(doc(db, 'users', user.id), {
@@ -95,6 +95,8 @@ export const signInWithGoogle = async (): Promise<User> => {
           updatedAt: serverTimestamp(),
         });
       }
+    } catch (dbError) {
+      console.error('Error creating user document:', dbError);
     }
     
     return user;
@@ -104,27 +106,40 @@ export const signInWithGoogle = async (): Promise<User> => {
   }
 };
 
-// Sign up with email and password
 export const signUp = async (email: string, password: string, name: string): Promise<User> => {
-  if (!auth || !db) {
-    throw new Error('Firebase not initialized');
-  }
-
   try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    
-    // Update the user's display name
-    await updateProfile(userCredential.user, { displayName: name });
-    
-    // Create user document in Firestore
-    await setDoc(doc(db, 'users', userCredential.user.uid), {
-      name,
-      email,
-      isSeller: false,
-      sellerModeActive: false,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    const auth = await getFirebaseAuth();
+    const db = await getFirebaseDb();
+    let userCredential: any;
+
+    if (Platform.OS === 'web') {
+      const { createUserWithEmailAndPassword, updateProfile } = await import('firebase/auth');
+      const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+      
+      userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(userCredential.user, { displayName: name });
+      
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
+        name,
+        email,
+        isSeller: false,
+        sellerModeActive: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      userCredential = await auth.createUserWithEmailAndPassword(email, password);
+      await userCredential.user.updateProfile({ displayName: name });
+      
+      await db.collection('users').doc(userCredential.user.uid).set({
+        name,
+        email,
+        isSeller: false,
+        sellerModeActive: false,
+        createdAt: db.FieldValue.serverTimestamp(),
+        updatedAt: db.FieldValue.serverTimestamp(),
+      });
+    }
     
     return await convertFirebaseUser(userCredential.user);
   } catch (error: any) {
@@ -133,109 +148,140 @@ export const signUp = async (email: string, password: string, name: string): Pro
   }
 };
 
-// Sign out
 export const signOut = async (): Promise<void> => {
-  if (!auth) {
-    throw new Error('Firebase Auth not initialized');
-  }
-
   try {
-    await firebaseSignOut(auth);
+    const auth = await getFirebaseAuth();
+    
+    if (Platform.OS === 'web') {
+      const { signOut: firebaseSignOut } = await import('firebase/auth');
+      await firebaseSignOut(auth);
+    } else {
+      await auth.signOut();
+    }
   } catch (error: any) {
     console.error('Sign out error:', error);
     throw new Error(error.message || 'Failed to sign out');
   }
 };
 
-// Reset password
 export const resetPassword = async (email: string): Promise<void> => {
-  if (!auth) {
-    throw new Error('Firebase Auth not initialized');
-  }
-
   try {
-    await sendPasswordResetEmail(auth, email);
+    const auth = await getFirebaseAuth();
+    
+    if (Platform.OS === 'web') {
+      const { sendPasswordResetEmail } = await import('firebase/auth');
+      await sendPasswordResetEmail(auth, email);
+    } else {
+      await auth.sendPasswordResetEmail(email);
+    }
   } catch (error: any) {
     console.error('Reset password error:', error);
     throw new Error(error.message || 'Failed to send reset email');
   }
 };
 
-// Get current user
 export const getCurrentUser = async (): Promise<User | null> => {
-  if (!auth) {
-    return null;
-  }
-
-  return new Promise((resolve) => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      unsubscribe();
-      if (firebaseUser) {
-        try {
-          const user = await convertFirebaseUser(firebaseUser);
-          resolve(user);
-        } catch (error) {
-          console.error('Error converting Firebase user:', error);
+  try {
+    const auth = await getFirebaseAuth();
+    
+    return new Promise((resolve) => {
+      const unsubscribe = auth.onAuthStateChanged(async (firebaseUser: any) => {
+        unsubscribe();
+        if (firebaseUser) {
+          try {
+            const user = await convertFirebaseUser(firebaseUser);
+            resolve(user);
+          } catch (error) {
+            console.error('Error converting Firebase user:', error);
+            resolve(null);
+          }
+        } else {
           resolve(null);
         }
-      } else {
-        resolve(null);
-      }
+      });
     });
-  });
+  } catch (error) {
+    console.error('Error getting current user:', error);
+    return null;
+  }
 };
 
-// Update user profile with better error handling
 export const updateUserProfile = async (userId: string, data: Partial<User>): Promise<User> => {
-  if (!db) {
-    throw new Error('Firestore not initialized');
-  }
-
   try {
-    const userDocRef = doc(db, 'users', userId);
+    const db = await getFirebaseDb();
     
-    // Check if document exists first
-    const userDoc = await getDoc(userDocRef);
-    if (!userDoc.exists()) {
-      // Create the document if it doesn't exist
-      console.log('Creating new user document for:', userId);
-      await setDoc(userDocRef, {
-        ...data,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+    if (Platform.OS === 'web') {
+      const { doc, getDoc, setDoc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+      const userDocRef = doc(db, 'users', userId);
+      
+      const userDoc = await getDoc(userDocRef);
+      if (!userDoc.exists()) {
+        await setDoc(userDocRef, {
+          ...data,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await updateDoc(userDocRef, {
+          ...data,
+          updatedAt: serverTimestamp(),
+        });
+      }
+      
+      const updatedUserDoc = await getDoc(userDocRef);
+      if (!updatedUserDoc.exists()) {
+        throw new Error('User document not found after update');
+      }
+      
+      const userData = updatedUserDoc.data();
+      return {
+        id: userId,
+        name: userData.name,
+        email: userData.email,
+        photoURL: userData.photoURL || undefined,
+        isSeller: userData.isSeller,
+        sellerModeActive: userData.sellerModeActive,
+        createdAt: userData.createdAt?.toDate?.()?.toISOString() || userData.createdAt,
+      };
     } else {
-      // Update existing document
-      console.log('Updating existing user document for:', userId);
-      await updateDoc(userDocRef, {
-        ...data,
-        updatedAt: serverTimestamp(),
-      });
+      const userDocRef = db.collection('users').doc(userId);
+      
+      const userDoc = await userDocRef.get();
+      if (!userDoc.exists) {
+        await userDocRef.set({
+          ...data,
+          createdAt: db.FieldValue.serverTimestamp(),
+          updatedAt: db.FieldValue.serverTimestamp(),
+        });
+      } else {
+        await userDocRef.update({
+          ...data,
+          updatedAt: db.FieldValue.serverTimestamp(),
+        });
+      }
+      
+      const updatedUserDoc = await userDocRef.get();
+      if (!updatedUserDoc.exists) {
+        throw new Error('User document not found after update');
+      }
+      
+      const userData = updatedUserDoc.data();
+      return {
+        id: userId,
+        name: userData.name,
+        email: userData.email,
+        photoURL: userData.photoURL || undefined,
+        isSeller: userData.isSeller,
+        sellerModeActive: userData.sellerModeActive,
+        createdAt: userData.createdAt?.toDate?.()?.toISOString() || userData.createdAt,
+      };
     }
-    
-    // Get updated user data
-    const updatedUserDoc = await getDoc(userDocRef);
-    if (!updatedUserDoc.exists()) {
-      throw new Error('User document not found after update');
-    }
-    
-    const userData = updatedUserDoc.data();
-    return {
-      id: userId,
-      name: userData.name,
-      email: userData.email,
-      photoURL: userData.photoURL || undefined,
-      isSeller: userData.isSeller,
-      sellerModeActive: userData.sellerModeActive,
-      createdAt: userData.createdAt?.toDate?.()?.toISOString() || userData.createdAt,
-    };
   } catch (error: any) {
     console.error('Update profile error:', error);
     throw new Error(error.message || 'Failed to update profile');
   }
 };
 
-// Upgrade user to seller
 export const upgradeToSeller = async (userId: string): Promise<User> => {
   return await updateUserProfile(userId, { 
     isSeller: true, 
